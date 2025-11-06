@@ -16,6 +16,14 @@ const intents: Intent[] = [
   { pattern: "elimina la orden", action: "delete::order", params: ["id"] },
   { pattern: "borra la orden", action: "delete::order", params: ["id"] },
   { pattern: "delete order", action: "delete::order", params: ["id"] },
+  { pattern: "agrega la orden", action: "create::order" },
+  { pattern: "añade la orden", action: "create::order" },
+  { pattern: "add the order", action: "create::order" },
+  { pattern: "add order", action: "create::order" },
+  { pattern: "modifica la orden", action: "update::order", params: ["id"] },
+  { pattern: "actualiza la orden", action: "update::order", params: ["id"] },
+  { pattern: "update the order", action: "update::order", params: ["id"] },
+  { pattern: "update order", action: "update::order", params: ["id"] },
   { pattern: "muestra capacidades", action: "show::capabilities" },
   { pattern: "ayuda nura", action: "show::capabilities" },
   { pattern: "show capabilities", action: "show::capabilities" },
@@ -252,6 +260,64 @@ export class NuraClient {
     return { cleaned, numbers }
   }
 
+  private formatOrderText(text: string): string {
+    return text
+      .trim()
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .map((segment) => (segment ? segment[0].toUpperCase() + segment.slice(1) : segment))
+      .join(" ")
+  }
+
+  private parseCreateOrder(text: string): { name?: string; notes?: string } {
+    const match = text.match(/(?:agrega|añade|add)\s+la\s+orden\s+(.*)$/i)
+    if (!match) return {}
+    const rest = match[1].trim()
+    if (!rest) return {}
+
+    const separators = [" con nota ", " con notas ", " con comentario ", " con comentarios ", " with note ", " with notes ", " nota:", " note:"]
+    for (const separator of separators) {
+      const index = rest.indexOf(separator)
+      if (index !== -1) {
+        const namePart = rest.slice(0, index)
+        const notesPart = rest.slice(index + separator.length)
+        return {
+          name: this.formatOrderText(namePart || rest),
+          notes: this.formatOrderText(notesPart),
+        }
+      }
+    }
+
+    return { name: this.formatOrderText(rest) }
+  }
+
+  private parseUpdateOrder(text: string): { name?: string; notes?: string } {
+    const match = text.match(/(?:modifica|actualiza|update)\s+la\s+orden(?:\s+\d+)?\s*(.*)$/i)
+    if (!match) return {}
+    const rest = match[1].trim()
+    if (!rest) return {}
+
+    const separators = [" con nota ", " con notas ", " with note ", " with notes ", " nota:", " note:"]
+    for (const separator of separators) {
+      const index = rest.indexOf(separator)
+      if (index !== -1) {
+        const namePart = rest.slice(0, index).trim()
+        const notesPart = rest.slice(index + separator.length)
+        return {
+          name: namePart ? this.formatOrderText(namePart) : undefined,
+          notes: this.formatOrderText(notesPart),
+        }
+      }
+    }
+
+    if (rest.startsWith("a ")) {
+      const newName = rest.replace(/^a\s+/i, "")
+      return { name: this.formatOrderText(newName) }
+    }
+
+    return { notes: this.formatOrderText(rest) }
+  }
+
   private fuzzyMatch(text: string, locale: "es" | "en"): { intent: string; confidence: number; matchedBy: MatchedBy } {
     const ranking: RankingEntry[] = []
 
@@ -281,6 +347,14 @@ export class NuraClient {
 
     if (/elimina|borra|delete/i.test(text) && /orden|order/i.test(text)) {
       return { intent: "delete::order", confidence: 0.6, matchedBy: "fallback" }
+    }
+
+    if (/(agrega|añade|add)/i.test(text) && /orden|order/i.test(text)) {
+      return { intent: "create::order", confidence: 0.58, matchedBy: "fallback" }
+    }
+
+    if (/(modifica|actualiza|update)/i.test(text) && /orden|order/i.test(text)) {
+      return { intent: "update::order", confidence: 0.58, matchedBy: "fallback" }
     }
 
     if (/(show|help|ayuda|capacit)/i.test(text)) {
@@ -417,6 +491,20 @@ export class NuraClient {
       }
     }
 
+    if (finalIntent === "create::order") {
+      const details = this.parseCreateOrder(withoutNumerals)
+      if (details.name || details.notes) {
+        finalPayload = { ...(finalPayload ?? {}), ...details }
+      }
+    }
+
+    if (finalIntent === "update::order") {
+      const details = this.parseUpdateOrder(withoutNumerals)
+      if (details.name || details.notes) {
+        finalPayload = { ...(finalPayload ?? {}), ...details }
+      }
+    }
+
     const result: NuraResult = {
       intent: finalIntent,
       confidence: via === "phonetic" ? Math.min(confidence, wakeConfidence) : confidence,
@@ -449,6 +537,23 @@ export class NuraClient {
         description: id ? `Delete order ${id}` : "Delete last referenced order",
       }
       eventBus.emit("action.pending", { intent, payload: pendingAction.payload, description: pendingAction.description })
+    } else if (intent === "create::order") {
+      const rawName = payload?.name
+      const rawNotes = payload?.notes
+      eventBus.emit("order.voice.add", {
+        name: typeof rawName === "string" && rawName.trim() ? this.formatOrderText(rawName) : undefined,
+        notes: typeof rawNotes === "string" && rawNotes.trim() ? this.formatOrderText(rawNotes) : undefined,
+      })
+    } else if (intent === "update::order") {
+      const idValue = payload?.id
+      const numericId = typeof idValue === "number" ? idValue : Number.parseInt(String(idValue ?? ""), 10)
+      const rawName = payload?.name
+      const rawNotes = payload?.notes
+      eventBus.emit("order.voice.update", {
+        id: Number.isNaN(numericId) ? undefined : numericId,
+        name: typeof rawName === "string" && rawName.trim() ? this.formatOrderText(rawName) : undefined,
+        notes: typeof rawNotes === "string" && rawNotes.trim() ? this.formatOrderText(rawNotes) : undefined,
+      })
     } else if (intent === "show::capabilities") {
       eventBus.emit("ui.capabilities.open", {})
     } else if (intent === "open::telemetry") {
