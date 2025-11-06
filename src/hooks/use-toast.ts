@@ -1,20 +1,20 @@
-// src/hooks/use-toast.ts
-export type ToastPayload = {
-  title?: string;
-  description?: string;
-  variant?: "default" | "destructive" | "success" | "info";
-  durationMs?: number; // default 3000
-};
+"use client"
 
-const EVT = "nura:toast:add";
+import * as React from "react"
+import { TOAST_EVENT, type ToastOptions } from "@/components/ui/toaster"
 
-export function useToast() {
-  function toast(payload: ToastPayload) {
-    const event = new CustomEvent(EVT, { detail: payload });
-    window.dispatchEvent(event);
-  }
-  return { toast };
+type UseToastReturn = {
+  toast: (options: ToastOptions) => void
 }
 
-// Exponemos el nombre del evento para que el Toaster pueda escucharlo
-export const TOAST_EVENT = EVT;
+export function useToast(): UseToastReturn {
+  const toast = React.useCallback((options: ToastOptions) => {
+    if (typeof window === "undefined") return
+    const event = new CustomEvent<ToastOptions>(TOAST_EVENT, {
+      detail: options,
+    })
+    window.dispatchEvent(event)
+  }, [])
+
+  return { toast }
+}
