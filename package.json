@@ -22,9 +22,11 @@
     "vite": "^7.2.0"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "lucide-react": "^0.454.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "sonner": "^2.0.7"
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.3.1"
   }
 }
