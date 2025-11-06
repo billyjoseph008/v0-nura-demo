@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Plug, Unplug } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { mcpClient, loadMcpUrl, saveMcpUrl } from "@/lib/mcp"
 import type { McpResource, McpTool } from "@/lib/types"
+import { eventBus } from "@/lib/telemetry"
 
 export default function McpPanel() {
   const [url, setUrl] = useState(loadMcpUrl())
@@ -17,7 +18,7 @@ export default function McpPanel() {
   const [tools, setTools] = useState<McpTool[]>([])
   const { toast } = useToast()
 
-  const handleConnect = async () => {
+  const handleConnect = useCallback(async () => {
     try {
       await mcpClient.connect(url)
       saveMcpUrl(url)
@@ -26,16 +27,18 @@ export default function McpPanel() {
         title: "Connected",
         description: "Successfully connected to MCP gateway",
       })
+      eventBus.emit("mcp.connected.ui", { url })
     } catch (error) {
       toast({
         title: "Connection Failed",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
+      eventBus.emit("mcp.error", { error: error instanceof Error ? error.message : "Connection failed" })
     }
-  }
+  }, [toast, url])
 
-  const handleDisconnect = () => {
+  const handleDisconnect = useCallback(() => {
     mcpClient.disconnect()
     setConnected(false)
     setResources([])
@@ -44,9 +47,10 @@ export default function McpPanel() {
       title: "Disconnected",
       description: "Disconnected from MCP gateway",
     })
-  }
+    eventBus.emit("mcp.disconnected.ui", {})
+  }, [toast])
 
-  const handleListResources = async () => {
+  const handleListResources = useCallback(async () => {
     try {
       const result = await mcpClient.listResources()
       setResources(result)
@@ -54,16 +58,18 @@ export default function McpPanel() {
         title: "Resources Listed",
         description: `Found ${result.length} resources`,
       })
+      eventBus.emit("mcp.resources.listed", { count: result.length, resources: result })
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to list resources",
         variant: "destructive",
       })
+      eventBus.emit("mcp.error", { error: error instanceof Error ? error.message : "Failed to list resources" })
     }
-  }
+  }, [toast])
 
-  const handleListTools = async () => {
+  const handleListTools = useCallback(async () => {
     try {
       const result = await mcpClient.listTools()
       setTools(result)
@@ -71,14 +77,58 @@ export default function McpPanel() {
         title: "Tools Listed",
         description: `Found ${result.length} tools`,
       })
+      eventBus.emit("mcp.tools.listed", { count: result.length, tools: result })
     } catch (error) {
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to list tools",
         variant: "destructive",
       })
+      eventBus.emit("mcp.error", { error: error instanceof Error ? error.message : "Failed to list tools" })
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    const handleConnectRequest = () => {
+      if (connected) {
+        toast({ title: "Already connected", description: "MCP gateway already active" })
+        return
+      }
+      void handleConnect()
+    }
+    const handleListResourcesRequest = () => {
+      if (!connected) {
+        toast({
+          title: "Not connected",
+          description: "Connect to MCP before listing resources",
+          variant: "destructive",
+        })
+        return
+      }
+      void handleListResources()
+    }
+    const handleListToolsRequest = () => {
+      if (!connected) {
+        toast({
+          title: "Not connected",
+          description: "Connect to MCP before listing tools",
+          variant: "destructive",
+        })
+        return
+      }
+      void handleListTools()
+    }
+
+    eventBus.on("mcp.request.connect", handleConnectRequest)
+    eventBus.on("mcp.request.listResources", handleListResourcesRequest)
+    eventBus.on("mcp.request.listTools", handleListToolsRequest)
+
+    return () => {
+      eventBus.off("mcp.request.connect", handleConnectRequest)
+      eventBus.off("mcp.request.listResources", handleListResourcesRequest)
+      eventBus.off("mcp.request.listTools", handleListToolsRequest)
+    }
+  }, [connected, handleConnect, handleListResources, handleListTools, toast])
 
   return (
     <Card>
@@ -104,11 +154,11 @@ export default function McpPanel() {
             disabled={connected}
           />
           {connected ? (
-            <Button onClick={handleDisconnect} variant="destructive" size="icon">
+            <Button onClick={handleDisconnect} variant="destructive" size="icon" data-testid="mcp-disconnect">
               <Unplug className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={handleConnect} size="icon">
+            <Button onClick={handleConnect} size="icon" data-testid="mcp-connect">
               <Plug className="h-4 w-4" />
             </Button>
           )}
@@ -116,10 +166,22 @@ export default function McpPanel() {
 
         {connected && (
           <div className="flex gap-2">
-            <Button onClick={handleListResources} variant="outline" size="sm" className="flex-1 bg-transparent">
+            <Button
+              onClick={handleListResources}
+              variant="outline"
+              size="sm"
+              className="flex-1 bg-transparent"
+              data-testid="mcp-list-resources"
+            >
               List Resources
             </Button>
-            <Button onClick={handleListTools} variant="outline" size="sm" className="flex-1 bg-transparent">
+            <Button
+              onClick={handleListTools}
+              variant="outline"
+              size="sm"
+              className="flex-1 bg-transparent"
+              data-testid="mcp-list-tools"
+            >
               List Tools
             </Button>
           </div>

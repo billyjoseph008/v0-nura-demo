@@ -9,9 +9,14 @@ const checklistItems = [
   'Synonyms: "abre el menú de pedidos" → orders',
   'Incomplete: "abre menú" → explain mode shows Top-K',
   'Context confirmation: "elimina la orden 15" then "sí, elimínala"',
+  'Capabilities modal: "muestra capacidades" or "help panel" opens dialog',
+  'Telemetry focus: "abre telemetría" highlights card/modal',
+  'Explain toggles: "activa modo explain" / "desactiva explain" update switch',
+  'MCP workflows: "conectar mcp", "list resources", "list tools" trigger panel',
   'Threshold=0.9 on borderline inputs → "No match"',
   "Compare strategies: damerau, soundex, double-metaphone, hybrid",
   "Locale auto vs forced (auto/es/en/es-419)",
+  'Keyboard shortcuts: ?, t, e respond globally',
 ]
 
 export default function Checklist() {
