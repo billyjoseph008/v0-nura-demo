@@ -8,12 +8,15 @@ import { Trash2 } from "lucide-react"
 import { eventBus, formatEvent } from "@/lib/telemetry"
 import { nuraClient } from "@/lib/nuraClient"
 import type { NuraResult, TelemetryEvent } from "@/lib/types"
+import { cn } from "@/lib/utils"
 
 interface TelemetryProps {
   lastResult: NuraResult | null
+  highlight?: boolean
+  onOpenModal: () => void
 }
 
-export default function Telemetry({ lastResult }: TelemetryProps) {
+export default function Telemetry({ lastResult, highlight = false, onOpenModal }: TelemetryProps) {
   const [events, setEvents] = useState<TelemetryEvent[]>([])
 
   useEffect(() => {
@@ -33,16 +36,22 @@ export default function Telemetry({ lastResult }: TelemetryProps) {
   const ranking = lastResult ? nuraClient.getLastRanking() : []
 
   return (
-    <Card>
+    <Card data-testid="telemetry-card" className={cn(highlight && "ring-2 ring-blue-500/70 shadow-lg shadow-blue-500/30")}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Telemetry & Ranking</CardTitle>
             <CardDescription>Real-time events and intent matching</CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleClear}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" data-testid="telemetry-open" onClick={onOpenModal}>
+              Open in modal
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleClear}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

@@ -47,6 +47,17 @@ pnpm build
 - `ok nura open orders menu` - Open orders menu (EN)
 - `abre el menú de pedidos` - Synonym matching (no wake word)
 - `elimina la orden 15` → `sí, elimínala` - Context confirmation
+- `ok nura muestra capacidades` - Open the interactive capabilities modal
+- `ok nura abre telemetría` - Spotlight telemetry card & modal
+- `ok nura activa modo explain` / `ok nura desactiva explain` - Toggle explain mode
+- `ok nora conectar mcp` / `ok nura list resources` / `ok nura list tools` - Drive MCP integration
+- `sí, confírmalo` - Approve the last destructive action
+
+## Keyboard Shortcuts
+
+- `?` - Open the capabilities/help modal
+- `t` - Toggle telemetry modal highlight
+- `e` - Toggle explain mode on/off
 
 ## Architecture
 

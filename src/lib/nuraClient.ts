@@ -16,6 +16,30 @@ const intents: Intent[] = [
   { pattern: "elimina la orden", action: "delete::order", params: ["id"] },
   { pattern: "borra la orden", action: "delete::order", params: ["id"] },
   { pattern: "delete order", action: "delete::order", params: ["id"] },
+  { pattern: "muestra capacidades", action: "show::capabilities" },
+  { pattern: "ayuda nura", action: "show::capabilities" },
+  { pattern: "show capabilities", action: "show::capabilities" },
+  { pattern: "help panel", action: "show::capabilities" },
+  { pattern: "abre telemetría", action: "open::telemetry" },
+  { pattern: "ver ranking", action: "open::telemetry" },
+  { pattern: "open telemetry", action: "open::telemetry" },
+  { pattern: "activa modo explain", action: "toggle::explain:on" },
+  { pattern: "activar explain", action: "toggle::explain:on" },
+  { pattern: "turn explain mode on", action: "toggle::explain:on" },
+  { pattern: "desactiva modo explain", action: "toggle::explain:off" },
+  { pattern: "desactiva explain", action: "toggle::explain:off" },
+  { pattern: "turn explain mode off", action: "toggle::explain:off" },
+  { pattern: "conectar mcp", action: "mcp::connect" },
+  { pattern: "connect mcp", action: "mcp::connect" },
+  { pattern: "listar recursos", action: "mcp::list:resources" },
+  { pattern: "list resources", action: "mcp::list:resources" },
+  { pattern: "listar tools", action: "mcp::list:tools" },
+  { pattern: "listar herramientas", action: "mcp::list:tools" },
+  { pattern: "list tools", action: "mcp::list:tools" },
+  { pattern: "sí, confírmalo", action: "confirm::last-action" },
+  { pattern: "sí, elimínala", action: "confirm::last-action" },
+  { pattern: "yes, confirm", action: "confirm::last-action" },
+  { pattern: "confirm it", action: "confirm::last-action" },
 ]
 
 const wakeWords = ["nura", "nora", "lura", "nula"]
@@ -69,7 +93,13 @@ const numeralsEN: Record<string, number> = {
   twenty: 20,
 }
 
-let lastContext: { action: string; payload?: Record<string, unknown> } | null = null
+type PendingAction = {
+  action: string
+  payload?: Record<string, unknown>
+  description: string
+}
+
+let pendingAction: PendingAction | null = null
 
 export class NuraClient {
   private threshold = 0.7
@@ -103,8 +133,36 @@ export class NuraClient {
       return this.locale === "es-419" ? "es" : (this.locale as "es" | "en")
     }
 
-    const esWords = ["abre", "elimina", "borra", "menú", "órdenes", "pedidos", "orden", "sí"]
-    const enWords = ["open", "delete", "menu", "orders", "order", "yes"]
+    const esWords = [
+      "abre",
+      "elimina",
+      "borra",
+      "menú",
+      "órdenes",
+      "pedidos",
+      "orden",
+      "sí",
+      "telemetría",
+      "capacidades",
+      "ayuda",
+      "recursos",
+      "herramientas",
+      "explica",
+    ]
+    const enWords = [
+      "open",
+      "delete",
+      "menu",
+      "orders",
+      "order",
+      "yes",
+      "telemetry",
+      "capabilities",
+      "help",
+      "resources",
+      "tools",
+      "explain",
+    ]
 
     const lowerText = text.toLowerCase()
     const esCount = esWords.filter((w) => lowerText.includes(w)).length
@@ -225,6 +283,35 @@ export class NuraClient {
       return { intent: "delete::order", confidence: 0.6, matchedBy: "fallback" }
     }
 
+    if (/(show|help|ayuda|capacit)/i.test(text)) {
+      return { intent: "show::capabilities", confidence: 0.55, matchedBy: "fallback" }
+    }
+
+    if (/telemetr|ranking/i.test(text)) {
+      return { intent: "open::telemetry", confidence: 0.55, matchedBy: "fallback" }
+    }
+
+    if (/explain/i.test(text)) {
+      const enable = /(on|activa|activar)/i.test(text)
+      return {
+        intent: enable ? "toggle::explain:on" : "toggle::explain:off",
+        confidence: 0.55,
+        matchedBy: "fallback",
+      }
+    }
+
+    if (/mcp/i.test(text) && /connect|conect/i.test(text)) {
+      return { intent: "mcp::connect", confidence: 0.55, matchedBy: "fallback" }
+    }
+
+    if (/mcp/i.test(text) && /(resource|recurso)/i.test(text)) {
+      return { intent: "mcp::list:resources", confidence: 0.55, matchedBy: "fallback" }
+    }
+
+    if (/mcp/i.test(text) && /(tool|herramienta)/i.test(text)) {
+      return { intent: "mcp::list:tools", confidence: 0.55, matchedBy: "fallback" }
+    }
+
     return { intent: "", confidence: 0, matchedBy: "none" }
   }
 
@@ -263,13 +350,17 @@ export class NuraClient {
     }
   }
 
-  private checkContext(text: string): { intent: string; confidence: number } | null {
+  private checkContext(text: string): { intent: string; confidence: number; payload?: Record<string, unknown> } | null {
     const affirmatives = ["sí", "si", "yes", "ok", "elimínala", "bórrala", "delete it"]
     const lowerText = text.toLowerCase()
 
-    if (lastContext && affirmatives.some((a) => lowerText.includes(a))) {
-      eventBus.emit("context.confirmation", { previous: lastContext, confirmed: true })
-      return { intent: lastContext.action, confidence: 0.95 }
+    if (pendingAction && affirmatives.some((a) => lowerText.includes(a))) {
+      const previous = pendingAction
+      const executed = this.confirmPendingAction()
+      if (executed) {
+        eventBus.emit("context.confirmation", { previous, confirmed: true })
+        return { intent: previous.action, confidence: 0.95, payload: previous.payload }
+      }
     }
 
     return null
@@ -287,14 +378,12 @@ export class NuraClient {
         via: "none",
         matchedBy: "plugin",
         locale: this.locale === "auto" ? "es" : this.locale,
-        payload: lastContext?.payload,
+        payload: contextMatch.payload,
         utterance,
         timestamp,
       }
 
-      if (!this.explainMode) {
-        await this.act(result)
-      }
+      // Action already executed in confirmPendingAction
 
       return result
     }
@@ -311,20 +400,36 @@ export class NuraClient {
     // Fuzzy match
     const { intent, confidence, matchedBy } = this.fuzzyMatch(withoutNumerals, detectedLocale)
 
+    let finalIntent = intent
+    let finalPayload: Record<string, unknown> | undefined =
+      Object.keys(numbers).length > 0 ? numbers : undefined
+    let skipAct = false
+
+    if (intent === "confirm::last-action" && pendingAction) {
+      const previous = pendingAction
+      const executed = this.confirmPendingAction()
+      if (executed) {
+        finalIntent = previous.action
+        finalPayload = previous.payload
+        skipAct = true
+      } else {
+        finalIntent = ""
+      }
+    }
+
     const result: NuraResult = {
-      intent,
+      intent: finalIntent,
       confidence: via === "phonetic" ? Math.min(confidence, wakeConfidence) : confidence,
       via,
       matchedBy,
       locale: this.locale === "auto" ? detectedLocale : this.locale,
-      payload: Object.keys(numbers).length > 0 ? numbers : undefined,
+      payload: finalPayload,
       utterance,
       timestamp,
     }
 
     // Store context for confirmations
-    if (intent && !this.explainMode) {
-      lastContext = { action: intent, payload: result.payload }
+    if (finalIntent && !this.explainMode && !skipAct) {
       await this.act(result)
     }
 
@@ -337,8 +442,52 @@ export class NuraClient {
     if (intent === "open::menu:orders") {
       eventBus.emit("ui.menu.open", { menu: "orders" })
     } else if (intent === "delete::order") {
-      eventBus.emit("order.delete", { id: payload?.id })
+      const id = payload?.id
+      pendingAction = {
+        action: intent,
+        payload: { id },
+        description: id ? `Delete order ${id}` : "Delete last referenced order",
+      }
+      eventBus.emit("action.pending", { intent, payload: pendingAction.payload, description: pendingAction.description })
+    } else if (intent === "show::capabilities") {
+      eventBus.emit("ui.capabilities.open", {})
+    } else if (intent === "open::telemetry") {
+      eventBus.emit("ui.telemetry.open", {})
+    } else if (intent === "toggle::explain:on") {
+      this.explainMode = true
+      eventBus.emit("ui.explain.toggle", { enabled: true })
+    } else if (intent === "toggle::explain:off") {
+      this.explainMode = false
+      eventBus.emit("ui.explain.toggle", { enabled: false })
+    } else if (intent === "mcp::connect") {
+      eventBus.emit("mcp.request.connect", {})
+    } else if (intent === "mcp::list:resources") {
+      eventBus.emit("mcp.request.listResources", {})
+    } else if (intent === "mcp::list:tools") {
+      eventBus.emit("mcp.request.listTools", {})
     }
+  }
+
+  getPendingAction(): PendingAction | null {
+    return pendingAction
+  }
+
+  confirmPendingAction(): boolean {
+    if (!pendingAction) return false
+    const current = pendingAction
+    pendingAction = null
+    if (current.action === "delete::order") {
+      eventBus.emit("order.delete", { id: current.payload?.id })
+      eventBus.emit("order.deleted", { id: current.payload?.id })
+    }
+    return true
+  }
+
+  cancelPendingAction(): void {
+    if (!pendingAction) return
+    const current = pendingAction
+    pendingAction = null
+    eventBus.emit("action.cancelled", { intent: current.action, payload: current.payload })
   }
 }
 

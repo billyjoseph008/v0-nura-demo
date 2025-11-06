@@ -10,13 +10,20 @@ interface ExamplesProps {
 }
 
 const examples = [
-  "ok nura abre el menú de órdenes",
-  "ok nura elimina la orden 15",
-  "ok nora abre el menú de órdenes",
-  "ok nura borra la orden quince",
-  "ok nura open orders menu",
-  "abre el menú de pedidos",
-  "sí, elimínala",
+  { label: "Open orders", utterance: "ok nura abre el menú de órdenes", testId: "ex-orders" },
+  { label: "Delete order", utterance: "ok nura elimina la orden 15", testId: "ex-delete" },
+  { label: "Phonetic wake", utterance: "ok nora abre el menú de órdenes", testId: "ex-phonetic" },
+  { label: "Numeral ES", utterance: "ok nura borra la orden quince", testId: "ex-numeral-es" },
+  { label: "Orders EN", utterance: "ok nura open orders menu", testId: "ex-orders-en" },
+  { label: "Menu synonym", utterance: "abre el menú de pedidos", testId: "ex-synonym" },
+  { label: "Confirm delete", utterance: "sí, elimínala", testId: "ex-confirm" },
+  { label: "Help panel", utterance: "ok nura muestra capacidades", testId: "ex-capabilities" },
+  { label: "Open telemetry", utterance: "ok nura abre telemetría", testId: "ex-telemetry" },
+  { label: "Explain on", utterance: "ok nura activa modo explain", testId: "ex-explain-on" },
+  { label: "Explain off", utterance: "ok nura desactiva explain", testId: "ex-explain-off" },
+  { label: "Connect MCP", utterance: "ok nora conectar mcp", testId: "ex-mcp-connect" },
+  { label: "List tools", utterance: "ok nura list tools", testId: "ex-mcp-tools" },
+  { label: "List resources", utterance: "ok nura list resources", testId: "ex-mcp-resources" },
 ]
 
 export default function Examples({ onResult }: ExamplesProps) {
@@ -33,9 +40,16 @@ export default function Examples({ onResult }: ExamplesProps) {
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2">
-          {examples.map((example, index) => (
-            <Button key={index} variant="outline" size="sm" onClick={() => handleExample(example)} className="text-xs">
-              {example}
+          {examples.map((example) => (
+            <Button
+              key={example.testId}
+              variant="outline"
+              size="sm"
+              onClick={() => handleExample(example.utterance)}
+              className="text-xs"
+              data-testid={example.testId}
+            >
+              {example.label}
             </Button>
           ))}
         </div>
