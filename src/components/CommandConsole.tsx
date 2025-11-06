@@ -16,12 +16,19 @@ import type { NuraResult, Locale, FuzzyStrategy } from "@/lib/types"
 
 interface CommandConsoleProps {
   onResult: (result: NuraResult) => void
+  explainMode: boolean
+  onExplainModeChange: (value: boolean) => void
+  onOpenCapabilities: () => void
 }
 
-export default function CommandConsole({ onResult }: CommandConsoleProps) {
+export default function CommandConsole({
+  onResult,
+  explainMode,
+  onExplainModeChange,
+  onOpenCapabilities,
+}: CommandConsoleProps) {
   const [utterance, setUtterance] = useState("")
   const [isListening, setIsListening] = useState(false)
-  const [explainMode, setExplainMode] = useState(false)
   const [threshold, setThreshold] = useState(0.7)
   const [strategy, setStrategy] = useState<FuzzyStrategy>("hybrid")
   const [locale, setLocale] = useState<Locale>("auto")
@@ -107,6 +114,20 @@ export default function CommandConsole({ onResult }: CommandConsoleProps) {
         <CardDescription>Type or speak your commands</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" data-testid="capabilities-open" onClick={onOpenCapabilities}>
+            Help & Capabilities
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => setUtterance("ok nura muestra capacidades")}
+          >
+            Prefill help phrase
+          </Button>
+        </div>
+
         <div className="flex gap-2">
           <Input
             placeholder="ok nura abre el menú de órdenes"
@@ -171,7 +192,7 @@ export default function CommandConsole({ onResult }: CommandConsoleProps) {
               <Info className="h-4 w-4" />
               Explain Mode
             </Label>
-            <Switch id="explain" checked={explainMode} onCheckedChange={setExplainMode} />
+            <Switch id="explain" checked={explainMode} onCheckedChange={onExplainModeChange} data-testid="explain-switch" />
           </div>
         </div>
 
