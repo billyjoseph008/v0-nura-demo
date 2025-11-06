@@ -17,6 +17,36 @@ export interface NuraResult {
   timestamp: number
 }
 
+export interface NuraPendingActionContext {
+  intent: string
+  description: string
+  payload?: Record<string, unknown>
+}
+
+export interface NuraDialogContext {
+  intent?: string
+  description?: string
+  confirmActionTestId?: string
+  cancelActionTestId?: string
+}
+
+export interface NuraOrderContext {
+  id: number
+  name: string
+  notes?: string
+}
+
+export interface NuraGlobalContext {
+  orders: NuraOrderContext[]
+  modals: {
+    capabilities: boolean
+    telemetry: boolean
+    orders: boolean
+  }
+  pendingAction: NuraPendingActionContext | null
+  confirmDialog: NuraDialogContext | null
+}
+
 export interface TelemetryEvent {
   type: string
   data: unknown

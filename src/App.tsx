@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { useNuraGlobalListener } from "@/hooks/useNuraGlobalListener"
 import { eventBus } from "@/lib/telemetry"
 import { nuraClient } from "@/lib/nuraClient"
 import type { NuraResult } from "@/lib/types"
@@ -362,6 +363,25 @@ export default function App() {
     [handleUpdateOrder, resolveOrderId, toast],
   )
 
+  const handleConfirm = useCallback(() => {
+    if (!pendingAction) {
+      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      return
+    }
+    const success = nuraClient.confirmPendingAction()
+    if (!success) {
+      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
+    }
+    setPendingAction(null)
+  }, [pendingAction, toast])
+
+  const handleCancel = useCallback(() => {
+    if (pendingAction) {
+      nuraClient.cancelPendingAction()
+      setPendingAction(null)
+    }
+  }, [pendingAction])
+
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
     const handleTelemetry = () => openTelemetry("voice")
@@ -437,6 +457,12 @@ export default function App() {
     const handleMcpError = (data: { error?: string }) => {
       toast({ title: "MCP error", description: data.error ?? "MCP operation failed", variant: "destructive" })
     }
+    const handleDialogConfirmEvent = () => {
+      handleConfirm()
+    }
+    const handleDialogCancelEvent = () => {
+      handleCancel()
+    }
 
     eventBus.on("ui.capabilities.open", handleCapabilities)
     eventBus.on("ui.telemetry.open", handleTelemetry)
@@ -456,6 +482,8 @@ export default function App() {
     eventBus.on("mcp.resources.listed", handleMcpResources)
     eventBus.on("mcp.tools.listed", handleMcpTools)
     eventBus.on("mcp.error", handleMcpError)
+    eventBus.on("ui.dialog.confirm", handleDialogConfirmEvent)
+    eventBus.on("ui.dialog.cancel", handleDialogCancelEvent)
 
     return () => {
       eventBus.off("ui.capabilities.open", handleCapabilities)
@@ -476,11 +504,15 @@ export default function App() {
       eventBus.off("mcp.resources.listed", handleMcpResources)
       eventBus.off("mcp.tools.listed", handleMcpTools)
       eventBus.off("mcp.error", handleMcpError)
+      eventBus.off("ui.dialog.confirm", handleDialogConfirmEvent)
+      eventBus.off("ui.dialog.cancel", handleDialogCancelEvent)
     }
   }, [
     appendVoiceMessage,
     applyExplainMode,
     handleAddOrder,
+    handleCancel,
+    handleConfirm,
     handleVoiceAdd,
     handleVoiceUpdate,
     highlightedOrderId,
@@ -540,25 +572,6 @@ export default function App() {
     [applyExplainMode, openTelemetry],
   )
 
-  const handleConfirm = useCallback(() => {
-    if (!pendingAction) {
-      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
-      return
-    }
-    const success = nuraClient.confirmPendingAction()
-    if (!success) {
-      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
-    }
-    setPendingAction(null)
-  }, [pendingAction, toast])
-
-  const handleCancel = useCallback(() => {
-    if (pendingAction) {
-      nuraClient.cancelPendingAction()
-      setPendingAction(null)
-    }
-  }, [pendingAction])
-
   const handleCommandExecuted = useCallback(
     (command: string, source: "manual" | "voice") => {
       if (source === "voice") {
@@ -573,6 +586,16 @@ export default function App() {
     },
     [appendVoiceMessage, markStepCompleted],
   )
+
+  useNuraGlobalListener({
+    orders,
+    ordersOpen: ordersPanelOpen,
+    capabilitiesOpen,
+    telemetryOpen: telemetryModalOpen,
+    pendingAction,
+    confirmActionTestId: "confirm-yes",
+    cancelActionTestId: "confirm-no",
+  })
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_55%),_linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] text-foreground">
@@ -655,10 +678,10 @@ export default function App() {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="ghost" onClick={handleCancel} data-testid="confirm-no">
+              <Button variant="ghost" onClick={handleCancel} data-testid="confirm-no" nuraAction="cancel">
                 Cancel
               </Button>
-              <Button onClick={handleConfirm} data-testid="confirm-yes">
+              <Button onClick={handleConfirm} data-testid="confirm-yes" nuraAction="confirm">
                 Confirm
               </Button>
             </DialogFooter>

@@ -255,9 +255,11 @@ export function DialogDescription({ className, ...props }: React.HTMLAttributes<
   )
 }
 
-interface DialogCloseProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+interface DialogCloseProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  nuraAction?: string
+}
 
-export function DialogClose({ className, children, onClick, ...props }: DialogCloseProps) {
+export function DialogClose({ className, children, onClick, nuraAction = "cancel", ...props }: DialogCloseProps) {
   const context = useDialogContext("DialogClose")
   return (
     <button
@@ -267,6 +269,7 @@ export function DialogClose({ className, children, onClick, ...props }: DialogCl
         className,
       )}
       data-testid={props["data-testid"] ?? "dialog-close"}
+      data-nura-action={nuraAction}
       onClick={(event) => {
         onClick?.(event)
         if (!event.defaultPrevented) {
