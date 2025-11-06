@@ -7,6 +7,7 @@ type ButtonSize = "default" | "sm" | "lg" | "icon"
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant
   size?: ButtonSize
+  nuraAction?: string
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -27,18 +28,23 @@ const sizeClasses: Record<ButtonSize, string> = {
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", type = "button", ...props }, ref) => {
+  ({ className, variant = "default", size = "default", type = "button", nuraAction, ...props }, ref) => {
+    const { ["data-nura-action"]: dataAttrAction, ...rest } = props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      "data-nura-action"?: string
+    }
+    const resolvedNuraAction = nuraAction ?? dataAttrAction
     return (
       <button
         ref={ref}
         type={type}
+        data-nura-action={resolvedNuraAction}
         className={cn(
           "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--background))] disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
           className,
         )}
-        {...props}
+        {...rest}
       />
     )
   },

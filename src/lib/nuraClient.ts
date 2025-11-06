@@ -1,6 +1,15 @@
 // Mock Nura client implementation
 // In a real app, this would use @nura/core, @nura/plugin-voice, @nura/plugin-fuzzy
-import type { Locale, FuzzyStrategy, WakeMatchType, MatchedBy, NuraResult, RankingEntry } from "./types"
+import type {
+  Locale,
+  FuzzyStrategy,
+  WakeMatchType,
+  MatchedBy,
+  NuraResult,
+  RankingEntry,
+  NuraGlobalContext,
+  NuraPendingActionContext,
+} from "./types"
 import { eventBus } from "./telemetry"
 
 interface Intent {
@@ -115,6 +124,16 @@ export class NuraClient {
   private locale: Locale = "auto"
   private explainMode = false
   private lastRanking: RankingEntry[] = []
+  private context: NuraGlobalContext = {
+    orders: [],
+    modals: {
+      capabilities: false,
+      telemetry: false,
+      orders: false,
+    },
+    pendingAction: null,
+    confirmDialog: null,
+  }
 
   setThreshold(value: number) {
     this.threshold = value
@@ -134,6 +153,28 @@ export class NuraClient {
 
   getLastRanking(): RankingEntry[] {
     return this.lastRanking
+  }
+
+  updateContext(context: NuraGlobalContext): void {
+    this.context = {
+      orders: context.orders.map((order) => ({ ...order })),
+      modals: { ...context.modals },
+      pendingAction: context.pendingAction ? { ...context.pendingAction } : null,
+      confirmDialog: context.confirmDialog ? { ...context.confirmDialog } : null,
+    }
+
+    if (this.context.pendingAction) {
+      const nextPending: PendingAction = {
+        action: this.context.pendingAction.intent,
+        payload: this.context.pendingAction.payload,
+        description: this.context.pendingAction.description,
+      }
+      pendingAction = nextPending
+    } else if (!context.pendingAction) {
+      pendingAction = null
+    }
+
+    eventBus.emit("context.updated", this.context)
   }
 
   private detectLocale(text: string): "es" | "en" {
@@ -425,7 +466,30 @@ export class NuraClient {
   }
 
   private checkContext(text: string): { intent: string; confidence: number; payload?: Record<string, unknown> } | null {
-    const affirmatives = ["sí", "si", "yes", "ok", "elimínala", "bórrala", "delete it"]
+    const affirmatives = [
+      "sí",
+      "si",
+      "yes",
+      "ok",
+      "elimínala",
+      "bórrala",
+      "delete it",
+      "confirm",
+      "confirma",
+      "confírmala",
+    ]
+    const negatives = [
+      "no",
+      "cancel",
+      "cancelar",
+      "cancela",
+      "stop",
+      "rechaza",
+      "rechazar",
+      "no gracias",
+      "cancelala",
+      "cancélala",
+    ]
     const lowerText = text.toLowerCase()
 
     if (pendingAction && affirmatives.some((a) => lowerText.includes(a))) {
@@ -434,6 +498,34 @@ export class NuraClient {
       if (executed) {
         eventBus.emit("context.confirmation", { previous, confirmed: true })
         return { intent: previous.action, confidence: 0.95, payload: previous.payload }
+      }
+    }
+
+    if (pendingAction && negatives.some((a) => lowerText.includes(a))) {
+      const previous = pendingAction
+      this.cancelPendingAction()
+      eventBus.emit("context.confirmation", { previous, confirmed: false })
+      return { intent: "cancel::last-action", confidence: 0.9, payload: previous.payload }
+    }
+
+    const dialogContext = this.context.confirmDialog
+    if (dialogContext) {
+      if (affirmatives.some((a) => lowerText.includes(a))) {
+        eventBus.emit("ui.dialog.confirm", { intent: dialogContext.intent ?? "dialog::confirm", context: dialogContext })
+        return {
+          intent: dialogContext.intent ?? "dialog::confirm",
+          confidence: 0.9,
+          payload: dialogContext.description ? { description: dialogContext.description } : undefined,
+        }
+      }
+
+      if (negatives.some((a) => lowerText.includes(a))) {
+        eventBus.emit("ui.dialog.cancel", { intent: dialogContext.intent ?? "dialog::cancel", context: dialogContext })
+        return {
+          intent: dialogContext.intent ?? "dialog::cancel",
+          confidence: 0.88,
+          payload: dialogContext.description ? { description: dialogContext.description } : undefined,
+        }
       }
     }
 
@@ -536,6 +628,15 @@ export class NuraClient {
         payload: { id },
         description: id ? `Delete order ${id}` : "Delete last referenced order",
       }
+      this.context.pendingAction = {
+        intent,
+        description: pendingAction.description,
+        payload: pendingAction.payload ?? undefined,
+      }
+      this.context.confirmDialog = {
+        intent,
+        description: pendingAction.description,
+      }
       eventBus.emit("action.pending", { intent, payload: pendingAction.payload, description: pendingAction.description })
     } else if (intent === "create::order") {
       const rawName = payload?.name
@@ -581,6 +682,8 @@ export class NuraClient {
     if (!pendingAction) return false
     const current = pendingAction
     pendingAction = null
+    this.context.pendingAction = null
+    this.context.confirmDialog = null
     if (current.action === "delete::order") {
       eventBus.emit("order.delete", { id: current.payload?.id })
       eventBus.emit("order.deleted", { id: current.payload?.id })
@@ -592,6 +695,8 @@ export class NuraClient {
     if (!pendingAction) return
     const current = pendingAction
     pendingAction = null
+    this.context.pendingAction = null
+    this.context.confirmDialog = null
     eventBus.emit("action.cancelled", { intent: current.action, payload: current.payload })
   }
 }
