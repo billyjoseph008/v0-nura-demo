@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Mic, MicOff, Play, Info } from "lucide-react"
+import { useCallback, useState } from "react"
+import { Mic, MicOff, Play, Info, Sparkles } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ interface CommandConsoleProps {
   explainMode: boolean
   onExplainModeChange: (value: boolean) => void
   onOpenCapabilities: () => void
+  onCommandExecuted?: (command: string, source: "manual" | "voice") => void
 }
 
 export default function CommandConsole({
@@ -26,6 +27,7 @@ export default function CommandConsole({
   explainMode,
   onExplainModeChange,
   onOpenCapabilities,
+  onCommandExecuted,
 }: CommandConsoleProps) {
   const [utterance, setUtterance] = useState("")
   const [isListening, setIsListening] = useState(false)
@@ -34,32 +36,50 @@ export default function CommandConsole({
   const [locale, setLocale] = useState<Locale>("auto")
   const [lastCommand, setLastCommand] = useState("")
   const [lastResultText, setLastResultText] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
   const { toast } = useToast()
 
-  const handleRun = async () => {
-    if (!utterance.trim()) return
+  const runCommand = useCallback(
+    async (command: string, source: "manual" | "voice" = "manual") => {
+      const trimmed = command.trim()
+      if (!trimmed) return
 
-    nuraClient.setThreshold(threshold)
-    nuraClient.setStrategy(strategy)
-    nuraClient.setLocale(locale)
-    nuraClient.setExplainMode(explainMode)
+      setUtterance(trimmed)
+      setIsProcessing(true)
+      nuraClient.setThreshold(threshold)
+      nuraClient.setStrategy(strategy)
+      nuraClient.setLocale(locale)
+      nuraClient.setExplainMode(explainMode)
 
-    const result = await nuraClient.process(utterance)
-    onResult(result)
-    setLastCommand(utterance)
+      try {
+        const result = await nuraClient.process(trimmed)
+        onResult(result)
+        setLastCommand(trimmed)
+        onCommandExecuted?.(trimmed, source)
 
-    if (explainMode) {
-      setLastResultText("Explain mode: No action executed")
-    } else if (result.intent) {
-      setLastResultText(`Executed: ${result.intent}${result.payload ? ` with ${JSON.stringify(result.payload)}` : ""}`)
-    } else {
-      setLastResultText("No match found")
-    }
+        if (explainMode) {
+          setLastResultText("Explain mode: No action executed")
+        } else if (result.intent) {
+          setLastResultText(
+            `Executed: ${result.intent}${result.payload ? ` with ${JSON.stringify(result.payload)}` : ""}`,
+          )
+        } else {
+          setLastResultText("No match found")
+        }
 
-    toast({
-      title: explainMode ? "Explained" : "Processed",
-      description: `Intent: ${result.intent || "none"} (${result.confidence.toFixed(2)})`,
-    })
+        toast({
+          title: explainMode ? "Explained" : source === "voice" ? "Voice command executed" : "Processed",
+          description: `Intent: ${result.intent || "none"} (${result.confidence.toFixed(2)})`,
+        })
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [explainMode, locale, onCommandExecuted, onResult, strategy, threshold, toast],
+  )
+
+  const handleManualRun = () => {
+    void runCommand(utterance, "manual")
   }
 
   const toggleListening = () => {
@@ -88,6 +108,7 @@ export default function CommandConsole({
       const transcript = event.results[0][0].transcript
       setUtterance(transcript)
       setIsListening(false)
+      void runCommand(transcript, "voice")
     }
 
     recognition.onerror = () => {
@@ -110,8 +131,19 @@ export default function CommandConsole({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Command Console</CardTitle>
-        <CardDescription>Type or speak your commands</CardDescription>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle>Command Console</CardTitle>
+            <CardDescription>Type or speak your commands</CardDescription>
+          </div>
+          <div
+            className="hidden items-center gap-2 rounded-full border border-dashed border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-primary sm:flex"
+            aria-hidden={!isListening}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Ready to listen
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -128,20 +160,62 @@ export default function CommandConsole({
           </Button>
         </div>
 
-        <div className="flex gap-2">
-          <Input
-            placeholder="ok nura abre el menú de órdenes"
-            value={utterance}
-            onChange={(e) => setUtterance(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleRun()}
-            className="flex-1"
-          />
-          <Button onClick={toggleListening} variant={isListening ? "destructive" : "outline"} size="icon">
-            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </Button>
-          <Button onClick={handleRun} size="icon">
-            <Play className="h-4 w-4" />
-          </Button>
+        <div className="space-y-2">
+          <Label htmlFor="command-input" className="flex items-center gap-2 text-sm font-medium">
+            <Mic className="h-4 w-4" />
+            Say "ok nura" or type the action you want to execute
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="command-input"
+              placeholder="ok nura abre el menú de órdenes"
+              value={utterance}
+              onChange={(e) => setUtterance(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  handleManualRun()
+                }
+              }}
+              className="flex-1"
+              disabled={isProcessing}
+            />
+            <Button
+              onClick={toggleListening}
+              variant={isListening ? "destructive" : "outline"}
+              size="icon"
+              aria-pressed={isListening}
+              aria-label={isListening ? "Stop listening" : "Start listening"}
+              disabled={isProcessing}
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button onClick={handleManualRun} size="icon" disabled={isProcessing} aria-label="Run command">
+              <Play className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div
+          className="relative overflow-hidden rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-primary"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-4 w-4">
+              <span
+                className={`absolute inline-flex h-full w-full rounded-full bg-primary/60 ${
+                  isListening ? "animate-ping" : ""
+                }`}
+              />
+              <span className="relative inline-flex h-4 w-4 rounded-full bg-primary" />
+            </span>
+            <span className="font-medium">
+              {isListening
+                ? "Listening... your command will run automatically when you finish speaking"
+                : "Tap the microphone to speak. Voice commands execute instantly now."}
+            </span>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -195,6 +269,13 @@ export default function CommandConsole({
             <Switch id="explain" checked={explainMode} onCheckedChange={onExplainModeChange} data-testid="explain-switch" />
           </div>
         </div>
+
+        {isProcessing && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Sparkles className="h-4 w-4 animate-spin" />
+            Processing command...
+          </div>
+        )}
 
         {lastCommand && (
           <div className="space-y-2 rounded-lg border bg-muted/50 p-3">

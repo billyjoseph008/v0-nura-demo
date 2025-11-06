@@ -10,6 +10,7 @@ import Telemetry from "@/components/Telemetry"
 import McpPanel from "@/components/McpPanel"
 import Checklist from "@/components/Checklist"
 import Footer from "@/components/Footer"
+import OrdersPanel, { type OrderItem } from "@/components/OrdersPanel"
 import CapabilitiesModal, { type CapabilitiesQuickAction } from "@/components/CapabilitiesModal"
 import TelemetryModal from "@/components/TelemetryModal"
 import {
@@ -40,6 +41,11 @@ export default function App() {
   const [explainMode, setExplainMode] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null)
   const [actionSummary, setActionSummary] = useState<string | null>(null)
+  const [ordersPanelOpen, setOrdersPanelOpen] = useState(false)
+  const [orders, setOrders] = useState<OrderItem[]>([
+    { id: 1, name: "Latte vainilla", notes: "Sin azúcar" },
+    { id: 2, name: "Sandwich vegano", notes: "Agregar aderezo ligero" },
+  ])
   const highlightTimeout = useRef<number | null>(null)
   const { toast } = useToast()
 
@@ -162,7 +168,8 @@ export default function App() {
       })
     }
     const handleMenuOpen = () => {
-      setActionSummary("Orders menu opened (simulated).")
+      setOrdersPanelOpen(true)
+      setActionSummary("Interactive orders menu ready.")
       toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
     }
     const handlePending = (data: PendingActionState) => {
@@ -183,6 +190,10 @@ export default function App() {
       const id = data.id ?? "(unknown)"
       setActionSummary(`Order ${id} deleted.`)
       toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
+      const numericId = typeof id === "number" ? id : Number.parseInt(String(id), 10)
+      if (!Number.isNaN(numericId)) {
+        setOrders((previous) => previous.filter((order) => order.id !== numericId))
+      }
     }
     const handleContextConfirm = (data: { previous: PendingActionState }) => {
       const desc = data.previous.description || data.previous.intent
@@ -310,6 +321,53 @@ export default function App() {
     }
   }, [pendingAction])
 
+  const handleAddOrder = useCallback(
+    (order: { name: string; notes?: string }) => {
+      const newOrder: OrderItem = {
+        id: Date.now(),
+        name: order.name,
+        notes: order.notes,
+      }
+      setOrders((previous) => [...previous, newOrder])
+      setOrdersPanelOpen(true)
+      setActionSummary(`Order added: ${newOrder.name}.`)
+      toast({
+        title: "Order added",
+        description: order.notes ? `${order.name} · ${order.notes}` : order.name,
+        variant: "success",
+      })
+    },
+    [toast],
+  )
+
+  const handleDeleteOrder = useCallback(
+    (id: number) => {
+      const target = orders.find((order) => order.id === id)
+      setOrders((previous) => previous.filter((order) => order.id !== id))
+      if (target) {
+        setActionSummary(`Order removed: ${target.name}.`)
+        toast({
+          title: "Order removed",
+          description: target.notes ? `${target.name} · ${target.notes}` : target.name,
+        })
+      }
+    },
+    [orders, toast],
+  )
+
+  const handleCommandExecuted = useCallback(
+    (command: string, source: "manual" | "voice") => {
+      if (source === "voice") {
+        const normalized = command.toLowerCase()
+        if (normalized.includes("menú") || normalized.includes("menu")) {
+          setOrdersPanelOpen(true)
+          setActionSummary("Orders panel opened automatically from your voice command.")
+        }
+      }
+    },
+    [],
+  )
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -339,12 +397,20 @@ export default function App() {
               explainMode={explainMode}
               onExplainModeChange={(value) => applyExplainMode(value, "ui")}
               onOpenCapabilities={() => openCapabilities("ui")}
+              onCommandExecuted={handleCommandExecuted}
             />
             <Examples onResult={setLastResult} />
             <Checklist />
           </div>
 
           <div className="space-y-6">
+            <OrdersPanel
+              open={ordersPanelOpen}
+              onOpenChange={setOrdersPanelOpen}
+              orders={orders}
+              onAddOrder={handleAddOrder}
+              onDeleteOrder={handleDeleteOrder}
+            />
             <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
             <McpPanel />
           </div>
