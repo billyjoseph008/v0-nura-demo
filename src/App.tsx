@@ -240,202 +240,6 @@ export default function App() {
     ordersRef.current = orders
   }, [orders])
 
-  useEffect(() => {
-    const handleCapabilities = () => openCapabilities("voice")
-    const handleTelemetry = () => openTelemetry("voice")
-    const handleExplainToggle = (data: { enabled: boolean }) => applyExplainMode(data.enabled, "voice")
-    const handleVoiceWake = (data: { wake: string; canonical: string; confidence: number }) => {
-      toast({
-        title: "Phonetic wake detected",
-        description: `Alias "${data.wake}" matched (${Math.round(data.confidence * 100)}%)`,
-        variant: "info",
-      })
-    }
-    const handleMenuOpen = () => {
-      setOrdersPanelOpen(true)
-      setActionSummary("Interactive orders menu ready.")
-      markStepCompleted("openMenu")
-      appendVoiceMessage({ role: "nura", content: "Abrí el menú de órdenes, listo para crear o ajustar pedidos." })
-      toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
-    }
-    const handlePending = (data: PendingActionState) => {
-      setPendingAction(data)
-      setActionSummary(`Confirmation required: ${data.description}`)
-      toast({
-        title: "Confirmation required",
-        description: data.description,
-        variant: "destructive",
-      })
-      appendVoiceMessage({
-        role: "nura",
-        content: `${data.description}. Solo confirma y me encargo.`,
-      })
-    }
-    const handleCancelled = (data: PendingActionState) => {
-      setPendingAction(null)
-      toast({ title: "Action cancelled", description: data.description })
-      appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
-    }
-    const handleDeleted = (data: { id?: unknown }) => {
-      setPendingAction(null)
-      const id = data.id ?? "(unknown)"
-      const numericId = resolveOrderId(id)
-      setActionSummary(`Order ${id} deleted.`)
-      toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
-      if (numericId !== null) {
-        setOrders((previous) => previous.filter((order) => order.id !== numericId))
-        ordersRef.current = ordersRef.current.filter((order) => order.id !== numericId)
-        if (highlightedOrderId === numericId) {
-          setHighlightedOrderId(null)
-        }
-      }
-      markStepCompleted("deleteOrder")
-      appendVoiceMessage({
-        role: "nura",
-        content: `Orden ${numericId ?? id} eliminada. Checklist completo.`,
-      })
-    }
-    const handleContextConfirm = (data: { previous: PendingActionState }) => {
-      const desc = data.previous.description || data.previous.intent
-      setActionSummary(`Confirmed: ${desc}`)
-      toast({ title: "Confirmed", description: desc, variant: "success" })
-    }
-    const handleMcpConnected = (data: { url?: string }) => {
-      setActionSummary(`MCP connected${data.url ? `: ${data.url}` : ""}.`)
-    }
-    const handleMcpDisconnected = () => {
-      setActionSummary("MCP disconnected.")
-    }
-    const handleMcpResources = (data: { count?: number }) => {
-      setActionSummary(`Resources listed (${data.count ?? 0}).`)
-    }
-    const handleMcpTools = (data: { count?: number }) => {
-      setActionSummary(`Tools listed (${data.count ?? 0}).`)
-    }
-    const handleMcpError = (data: { error?: string }) => {
-      toast({ title: "MCP error", description: data.error ?? "MCP operation failed", variant: "destructive" })
-    }
-
-    eventBus.on("ui.capabilities.open", handleCapabilities)
-    eventBus.on("ui.telemetry.open", handleTelemetry)
-    eventBus.on("ui.explain.toggle", handleExplainToggle)
-    eventBus.on("voice.wake.fuzzy", handleVoiceWake)
-    eventBus.on("ui.menu.open", handleMenuOpen)
-    eventBus.on("action.pending", handlePending)
-    eventBus.on("action.cancelled", handleCancelled)
-    eventBus.on("order.deleted", handleDeleted)
-    eventBus.on("order.voice.add", handleVoiceAdd)
-    eventBus.on("order.voice.update", handleVoiceUpdate)
-    eventBus.on("context.confirmation", handleContextConfirm)
-    eventBus.on("mcp.connected", handleMcpConnected)
-    eventBus.on("mcp.connected.ui", handleMcpConnected)
-    eventBus.on("mcp.disconnected", handleMcpDisconnected)
-    eventBus.on("mcp.disconnected.ui", handleMcpDisconnected)
-    eventBus.on("mcp.resources.listed", handleMcpResources)
-    eventBus.on("mcp.tools.listed", handleMcpTools)
-    eventBus.on("mcp.error", handleMcpError)
-
-    return () => {
-      eventBus.off("ui.capabilities.open", handleCapabilities)
-      eventBus.off("ui.telemetry.open", handleTelemetry)
-      eventBus.off("ui.explain.toggle", handleExplainToggle)
-      eventBus.off("voice.wake.fuzzy", handleVoiceWake)
-      eventBus.off("ui.menu.open", handleMenuOpen)
-      eventBus.off("action.pending", handlePending)
-      eventBus.off("action.cancelled", handleCancelled)
-      eventBus.off("order.deleted", handleDeleted)
-      eventBus.off("order.voice.add", handleVoiceAdd)
-      eventBus.off("order.voice.update", handleVoiceUpdate)
-      eventBus.off("context.confirmation", handleContextConfirm)
-      eventBus.off("mcp.connected", handleMcpConnected)
-      eventBus.off("mcp.connected.ui", handleMcpConnected)
-      eventBus.off("mcp.disconnected", handleMcpDisconnected)
-      eventBus.off("mcp.disconnected.ui", handleMcpDisconnected)
-      eventBus.off("mcp.resources.listed", handleMcpResources)
-      eventBus.off("mcp.tools.listed", handleMcpTools)
-      eventBus.off("mcp.error", handleMcpError)
-    }
-  }, [
-    appendVoiceMessage,
-    applyExplainMode,
-    handleVoiceAdd,
-    handleVoiceUpdate,
-    highlightedOrderId,
-    markStepCompleted,
-    openCapabilities,
-    openTelemetry,
-    resolveOrderId,
-    toast,
-  ])
-
-  useEffect(() => {
-    const handleKeydown = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement)?.tagName?.match(/input|textarea|select/i)) {
-        return
-      }
-      if (event.key === "?" && event.shiftKey) {
-        event.preventDefault()
-        openCapabilities("keyboard")
-      }
-      if (event.key.toLowerCase() === "t") {
-        event.preventDefault()
-        toggleTelemetry()
-      }
-      if (event.key.toLowerCase() === "e") {
-        event.preventDefault()
-        applyExplainMode(!explainMode, "keyboard")
-      }
-    }
-
-    window.addEventListener("keydown", handleKeydown)
-    return () => window.removeEventListener("keydown", handleKeydown)
-  }, [applyExplainMode, explainMode, openCapabilities, toggleTelemetry])
-
-  const handleCapabilitiesQuickAction = useCallback(
-    (action: CapabilitiesQuickAction) => {
-      switch (action) {
-        case "telemetry.open":
-          openTelemetry("ui")
-          break
-        case "explain.on":
-          applyExplainMode(true, "ui")
-          break
-        case "explain.off":
-          applyExplainMode(false, "ui")
-          break
-        case "mcp.connect":
-          eventBus.emit("mcp.request.connect", { source: "modal" })
-          break
-        case "mcp.list.resources":
-          eventBus.emit("mcp.request.listResources", { source: "modal" })
-          break
-        case "mcp.list.tools":
-          eventBus.emit("mcp.request.listTools", { source: "modal" })
-          break
-      }
-    },
-    [applyExplainMode, openTelemetry],
-  )
-
-  const handleConfirm = useCallback(() => {
-    if (!pendingAction) {
-      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
-      return
-    }
-    const success = nuraClient.confirmPendingAction()
-    if (!success) {
-      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
-    }
-    setPendingAction(null)
-  }, [pendingAction, toast])
-
-  const handleCancel = useCallback(() => {
-    if (pendingAction) {
-      nuraClient.cancelPendingAction()
-      setPendingAction(null)
-    }
-  }, [pendingAction])
-
   const handleAddOrder = useCallback(
     (order: { name: string; notes?: string }, source: "ui" | "voice" = "ui") => {
       const newOrder: OrderItem = {
@@ -557,6 +361,203 @@ export default function App() {
     },
     [handleUpdateOrder, resolveOrderId, toast],
   )
+
+  useEffect(() => {
+    const handleCapabilities = () => openCapabilities("voice")
+    const handleTelemetry = () => openTelemetry("voice")
+    const handleExplainToggle = (data: { enabled: boolean }) => applyExplainMode(data.enabled, "voice")
+    const handleVoiceWake = (data: { wake: string; canonical: string; confidence: number }) => {
+      toast({
+        title: "Phonetic wake detected",
+        description: `Alias "${data.wake}" matched (${Math.round(data.confidence * 100)}%)`,
+        variant: "info",
+      })
+    }
+    const handleMenuOpen = () => {
+      setOrdersPanelOpen(true)
+      setActionSummary("Interactive orders menu ready.")
+      markStepCompleted("openMenu")
+      appendVoiceMessage({ role: "nura", content: "Abrí el menú de órdenes, listo para crear o ajustar pedidos." })
+      toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
+    }
+    const handlePending = (data: PendingActionState) => {
+      setPendingAction(data)
+      setActionSummary(`Confirmation required: ${data.description}`)
+      toast({
+        title: "Confirmation required",
+        description: data.description,
+        variant: "destructive",
+      })
+      appendVoiceMessage({
+        role: "nura",
+        content: `${data.description}. Solo confirma y me encargo.`,
+      })
+    }
+    const handleCancelled = (data: PendingActionState) => {
+      setPendingAction(null)
+      toast({ title: "Action cancelled", description: data.description })
+      appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
+    }
+    const handleDeleted = (data: { id?: unknown }) => {
+      setPendingAction(null)
+      const id = data.id ?? "(unknown)"
+      const numericId = resolveOrderId(id)
+      setActionSummary(`Order ${id} deleted.`)
+      toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
+      if (numericId !== null) {
+        setOrders((previous) => previous.filter((order) => order.id !== numericId))
+        ordersRef.current = ordersRef.current.filter((order) => order.id !== numericId)
+        if (highlightedOrderId === numericId) {
+          setHighlightedOrderId(null)
+        }
+      }
+      markStepCompleted("deleteOrder")
+      appendVoiceMessage({
+        role: "nura",
+        content: `Orden ${numericId ?? id} eliminada. Checklist completo.`,
+      })
+    }
+    const handleContextConfirm = (data: { previous: PendingActionState }) => {
+      const desc = data.previous.description || data.previous.intent
+      setActionSummary(`Confirmed: ${desc}`)
+      toast({ title: "Confirmed", description: desc, variant: "success" })
+    }
+    const handleMcpConnected = (data: { url?: string }) => {
+      setActionSummary(`MCP connected${data.url ? `: ${data.url}` : ""}.`)
+    }
+    const handleMcpDisconnected = () => {
+      setActionSummary("MCP disconnected.")
+    }
+    const handleMcpResources = (data: { count?: number }) => {
+      setActionSummary(`Resources listed (${data.count ?? 0}).`)
+    }
+    const handleMcpTools = (data: { count?: number }) => {
+      setActionSummary(`Tools listed (${data.count ?? 0}).`)
+    }
+    const handleMcpError = (data: { error?: string }) => {
+      toast({ title: "MCP error", description: data.error ?? "MCP operation failed", variant: "destructive" })
+    }
+
+    eventBus.on("ui.capabilities.open", handleCapabilities)
+    eventBus.on("ui.telemetry.open", handleTelemetry)
+    eventBus.on("ui.explain.toggle", handleExplainToggle)
+    eventBus.on("voice.wake.fuzzy", handleVoiceWake)
+    eventBus.on("ui.menu.open", handleMenuOpen)
+    eventBus.on("action.pending", handlePending)
+    eventBus.on("action.cancelled", handleCancelled)
+    eventBus.on("order.deleted", handleDeleted)
+    eventBus.on("order.voice.add", handleVoiceAdd)
+    eventBus.on("order.voice.update", handleVoiceUpdate)
+    eventBus.on("context.confirmation", handleContextConfirm)
+    eventBus.on("mcp.connected", handleMcpConnected)
+    eventBus.on("mcp.connected.ui", handleMcpConnected)
+    eventBus.on("mcp.disconnected", handleMcpDisconnected)
+    eventBus.on("mcp.disconnected.ui", handleMcpDisconnected)
+    eventBus.on("mcp.resources.listed", handleMcpResources)
+    eventBus.on("mcp.tools.listed", handleMcpTools)
+    eventBus.on("mcp.error", handleMcpError)
+
+    return () => {
+      eventBus.off("ui.capabilities.open", handleCapabilities)
+      eventBus.off("ui.telemetry.open", handleTelemetry)
+      eventBus.off("ui.explain.toggle", handleExplainToggle)
+      eventBus.off("voice.wake.fuzzy", handleVoiceWake)
+      eventBus.off("ui.menu.open", handleMenuOpen)
+      eventBus.off("action.pending", handlePending)
+      eventBus.off("action.cancelled", handleCancelled)
+      eventBus.off("order.deleted", handleDeleted)
+      eventBus.off("order.voice.add", handleVoiceAdd)
+      eventBus.off("order.voice.update", handleVoiceUpdate)
+      eventBus.off("context.confirmation", handleContextConfirm)
+      eventBus.off("mcp.connected", handleMcpConnected)
+      eventBus.off("mcp.connected.ui", handleMcpConnected)
+      eventBus.off("mcp.disconnected", handleMcpDisconnected)
+      eventBus.off("mcp.disconnected.ui", handleMcpDisconnected)
+      eventBus.off("mcp.resources.listed", handleMcpResources)
+      eventBus.off("mcp.tools.listed", handleMcpTools)
+      eventBus.off("mcp.error", handleMcpError)
+    }
+  }, [
+    appendVoiceMessage,
+    applyExplainMode,
+    handleAddOrder,
+    handleVoiceAdd,
+    handleVoiceUpdate,
+    highlightedOrderId,
+    markStepCompleted,
+    openCapabilities,
+    openTelemetry,
+    resolveOrderId,
+    toast,
+  ])
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement)?.tagName?.match(/input|textarea|select/i)) {
+        return
+      }
+      if (event.key === "?" && event.shiftKey) {
+        event.preventDefault()
+        openCapabilities("keyboard")
+      }
+      if (event.key.toLowerCase() === "t") {
+        event.preventDefault()
+        toggleTelemetry()
+      }
+      if (event.key.toLowerCase() === "e") {
+        event.preventDefault()
+        applyExplainMode(!explainMode, "keyboard")
+      }
+    }
+
+    window.addEventListener("keydown", handleKeydown)
+    return () => window.removeEventListener("keydown", handleKeydown)
+  }, [applyExplainMode, explainMode, openCapabilities, toggleTelemetry])
+
+  const handleCapabilitiesQuickAction = useCallback(
+    (action: CapabilitiesQuickAction) => {
+      switch (action) {
+        case "telemetry.open":
+          openTelemetry("ui")
+          break
+        case "explain.on":
+          applyExplainMode(true, "ui")
+          break
+        case "explain.off":
+          applyExplainMode(false, "ui")
+          break
+        case "mcp.connect":
+          eventBus.emit("mcp.request.connect", { source: "modal" })
+          break
+        case "mcp.list.resources":
+          eventBus.emit("mcp.request.listResources", { source: "modal" })
+          break
+        case "mcp.list.tools":
+          eventBus.emit("mcp.request.listTools", { source: "modal" })
+          break
+      }
+    },
+    [applyExplainMode, openTelemetry],
+  )
+
+  const handleConfirm = useCallback(() => {
+    if (!pendingAction) {
+      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      return
+    }
+    const success = nuraClient.confirmPendingAction()
+    if (!success) {
+      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
+    }
+    setPendingAction(null)
+  }, [pendingAction, toast])
+
+  const handleCancel = useCallback(() => {
+    if (pendingAction) {
+      nuraClient.cancelPendingAction()
+      setPendingAction(null)
+    }
+  }, [pendingAction])
 
   const handleCommandExecuted = useCallback(
     (command: string, source: "manual" | "voice") => {
