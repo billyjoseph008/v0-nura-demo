@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Sparkles } from "lucide-react"
+import { Link2, Sparkles, Trash2, Wand2 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import Header from "@/components/Header"
 import Badges from "@/components/Badges"
@@ -78,8 +79,7 @@ export default function App() {
   const [explainMode, setExplainMode] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null)
   const [actionSummary, setActionSummary] = useState<string | null>(null)
-  const [isListeningForConfirmation, setIsListeningForConfirmation] = useState(false)
-  const [ordersPanelOpen, setOrdersPanelOpen] = useState(false)
+  const [ordersPanelOpen, setOrdersPanelOpen] = useState(true)
   const [orders, setOrders] = useState<OrderItem[]>([
     { id: 1, name: "Latte vainilla", notes: "Sin azúcar" },
     { id: 2, name: "Sandwich vegano", notes: "Agregar aderezo ligero" },
@@ -412,22 +412,19 @@ export default function App() {
 
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
-      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      toast({ title: "Sin acciones pendientes", description: "No hay nada que confirmar", variant: "destructive" })
+      return
+    }
+
+    if (pendingAction.onConfirm) {
+      pendingAction.onConfirm()
       setPendingAction(null)
       return
     }
 
-    if (pendingAction.intent === "delete::order") {
-      const id = resolveOrderId(pendingAction.payload?.id)
-      if (id !== null) {
-        handleDeleteOrder(id)
-        markStepCompleted("deleteOrder")
-        toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
-        appendVoiceMessage({
-          role: "nura",
-          content: `Orden ${id} eliminada. Checklist completo.`,
-        })
-      }
+    const success = nuraClient.confirmPendingAction()
+    if (!success) {
+      toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
     // This is the key: stop listening for confirmation once the action is done.
     setIsListeningForConfirmation(false)
@@ -435,11 +432,116 @@ export default function App() {
   }, [pendingAction, resolveOrderId, handleDeleteOrder, markStepCompleted, appendVoiceMessage, toast])
 
   const handleCancel = useCallback(() => {
-    if (pendingAction) {
+    if (!pendingAction) return
+    pendingAction.onCancel?.()
+    if (!pendingAction.onConfirm) {
       nuraClient.cancelPendingAction()
     }
     setPendingAction(null)
-  }, [pendingAction, toast])
+  }, [pendingAction])
+
+  const guidedExamples = useMemo(
+    () => [
+      {
+        title: "Pedir un latte cremoso",
+        utterance: "ok nura agrega una orden de latte vainilla sin azúcar",
+        description: "Ideal para probar cómo capto nuevas órdenes.",
+      },
+      {
+        title: "Revisar tus pedidos",
+        utterance: "ok nura abre el menú de órdenes",
+        description: "Abro el panel para que veas todo.",
+      },
+      {
+        title: "Explorar habilidades",
+        utterance: "ok nura muestra tus capacidades",
+        description: "Te cuento lo que puedo hacer por ti.",
+      },
+    ],
+    [],
+  )
+
+  const handleExamplePrefill = useCallback((phrase: string) => {
+    setConsoleUtterance(phrase)
+    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
+    eventBus.emit("ui.examples.prefill", { utterance: phrase })
+  }, [])
+
+  const handleDeleteOrderPrompt = useCallback(() => {
+    setPendingAction({
+      intent: "delete::order",
+      description: "¿Eliminamos la orden 15?",
+      payload: { id: 15 },
+      source: "ui",
+      onConfirm: () => {
+        handleDeleteOrder(15)
+        eventBus.emit("ui.order.manualDeleted", { id: 15 })
+      },
+    })
+    setActionSummary("Puedo borrar la orden 15 cuando me lo confirmes.")
+  }, [handleDeleteOrder])
+
+  const handleCapabilitiesClick = useCallback(() => {
+    openCapabilities("ui")
+    eventBus.emit("ui.capabilities.manual", { source: "menu" })
+  }, [openCapabilities])
+
+  const handleMcpConnectClick = useCallback(() => {
+    setShowAdvanced(true)
+    setActionSummary("Abriendo el puente con MCP…")
+    eventBus.emit("ui.mcp.connect.manual", { source: "menu" })
+    eventBus.emit("mcp.request.connect", { source: "menu" })
+  }, [])
+
+  const menuActions = useMemo(
+    () =>
+      [
+        {
+          label: "Abrir menú de órdenes",
+          hint: "Gestiona pedidos con un toque mágico.",
+          onClick: () => {
+            setOrdersPanelOpen(true)
+            setActionSummary("Abrí el menú de órdenes para seguir contigo.")
+            eventBus.emit("ui.menu.quick-open", { source: "menu" })
+          },
+          testId: "btn-open-orders",
+          variant: "primary" as const,
+          icon: Sparkles,
+        },
+        {
+          label: "Eliminar orden 15",
+          hint: "Te pido confirmación antes de limpiar la lista.",
+          onClick: handleDeleteOrderPrompt,
+          testId: "btn-delete-15",
+          variant: "destructive" as const,
+          icon: Trash2,
+        },
+        {
+          label: "Capacidades de Nura",
+          hint: "Descubre todo lo que puedo hacer contigo.",
+          onClick: handleCapabilitiesClick,
+          testId: "btn-show-capabilities",
+          variant: "secondary" as const,
+          icon: Wand2,
+        },
+        {
+          label: "Conectar MCP",
+          hint: "Enlazo el puente con tus herramientas externas.",
+          onClick: handleMcpConnectClick,
+          testId: "btn-mcp-connect",
+          variant: "secondary" as const,
+          icon: Link2,
+        },
+      ] satisfies Array<{
+        label: string
+        hint: string
+        onClick: () => void
+        testId: string
+        variant: "primary" | "secondary" | "destructive"
+        icon: LucideIcon
+      }>,
+    [handleCapabilitiesClick, handleDeleteOrderPrompt, handleMcpConnectClick],
+  )
 
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
@@ -457,9 +559,7 @@ export default function App() {
       setActionSummary("Abrí el menú de órdenes para seguir contigo.")
       markStepCompleted("openMenu")
       appendVoiceMessage({ role: "nura", content: "Abrí el menú de órdenes, listo para crear o ajustar pedidos." })
-      toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
-      // Not a confirmation flow, ensure this is off
-      setIsListeningForConfirmation(false)
+      toast({ title: "Órdenes", description: "El menú ya está abierto", variant: "success" })
     }
     const handlePending = (data: PendingActionState) => {
       setPendingAction({ ...data, source: "voice" })
@@ -478,13 +578,28 @@ export default function App() {
     }
     const handleCancelled = (data: PendingActionState) => {
       setPendingAction(null)
-      toast({ title: "Action cancelled", description: data.description })
-      // We're done with the confirmation flow
-      setIsListeningForConfirmation(false)
+      setActionSummary("Cancelé la acción, nada cambió.")
+      toast({ title: "Acción cancelada", description: data.description })
       appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
     }
     const handleDeleted = (data: { id?: unknown }) => {
-      // This logic is now centralized in handleConfirm
+      setPendingAction(null)
+      const id = data.id ?? "(unknown)"
+      const numericId = resolveOrderId(id)
+      setActionSummary(`Listo, la orden ${numericId ?? id} ya no está.`)
+      toast({ title: "Orden eliminada", description: `Quité la orden ${id}`, variant: "success" })
+      if (numericId !== null) {
+        setOrders((previous) => previous.filter((order) => order.id !== numericId))
+        ordersRef.current = ordersRef.current.filter((order) => order.id !== numericId)
+        if (highlightedOrderId === numericId) {
+          setHighlightedOrderId(null)
+        }
+      }
+      markStepCompleted("deleteOrder")
+      appendVoiceMessage({
+        role: "nura",
+        content: `Orden ${numericId ?? id} eliminada. Checklist completo.`,
+      })
     }
     const handleContextConfirm = (data: { previous: PendingActionState }) => {
       const desc = data.previous.description || data.previous.intent
@@ -650,7 +765,7 @@ export default function App() {
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),_transparent_65%),_radial-gradient(circle_at_bottom,_rgba(52,211,153,0.2),_transparent_70%)] text-[hsl(var(--foreground))]">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.25),_transparent_60%),radial-gradient(circle_at_bottom_right,_rgba(6,182,212,0.18),_transparent_70%)]" />
       <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-36 pt-16 sm:px-6 lg:px-10">
-        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
           <section
             data-testid="guided-demo"
             className="relative overflow-hidden rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.65] p-8 shadow-[0_25px_80px_rgba(99,102,241,0.25)] backdrop-blur-xl transition-all duration-500"
@@ -663,11 +778,10 @@ export default function App() {
               Demo guiada por voz
             </div>
             <h1 className="mt-6 text-3xl font-semibold leading-tight text-[hsl(var(--foreground))] sm:text-4xl">
-              Habla natural, yo lo hago mágico
+              Explora Nura sin tecnicismos
             </h1>
             <p className="mt-4 max-w-xl text-base text-[hsl(var(--foreground))/0.75]">
-              Da el primer paso con frases sencillas. Yo interpreto tu intención, ejecuto acciones y te cuento lo que
-              sucede sin tecnicismos.
+              Prueba frases cotidianas, mira cómo reacciono y descubre nuevas formas de colaborar solo con tu voz.
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {guidedExamples.map((example) => (
@@ -683,22 +797,45 @@ export default function App() {
                 </button>
               ))}
             </div>
+
           </section>
 
-          {!lastResult && actionSummary && (
-            <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.3] p-4 text-sm" data-testid="action-summary">
-              {actionSummary}
+          <section className="relative h-full space-y-8">
+            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-6 shadow-[0_20px_60px_rgba(59,130,246,0.25)] backdrop-blur-xl">
+              <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Menú interactivo</h2>
+              <p className="mt-2 text-sm text-[hsl(var(--foreground))/0.75]">
+                Accede rápido a las acciones más usadas o lánzalas con tu voz cuando quieras.
+              </p>
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                {menuActions.map((action) => {
+                  const Icon = action.icon
+                  return (
+                    <button
+                      key={action.testId}
+                      type="button"
+                      data-testid={action.testId}
+                      onClick={action.onClick}
+                      className={`group flex flex-col gap-1 rounded-2xl border px-4 py-4 text-left transition-all duration-500 hover:scale-[1.01] hover:shadow-[0_25px_60px_rgba(129,140,248,0.35)] ${
+                        action.variant === "primary"
+                          ? "border-primary/60 bg-primary/20 text-[hsl(var(--foreground))]"
+                          : action.variant === "destructive"
+                            ? "border-rose-500/40 bg-rose-500/15 text-[hsl(var(--foreground))] hover:border-rose-400/60"
+                            : "border-[hsl(var(--border))/60] bg-[hsl(var(--muted))/0.3]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-sm font-semibold">
+                        <Icon className="h-4 w-4" />
+                        {action.label}
+                      </div>
+                      <p className="text-xs text-[hsl(var(--foreground))/0.7]">{action.hint}</p>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          )}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-6">
-              <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
-              <Examples onResult={setLastResult} />
-              <Checklist voiceStatuses={voiceSteps} />
-            </div>
-
-            <div className="space-y-6">
+            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-6 shadow-[0_20px_60px_rgba(15,118,110,0.25)] backdrop-blur-xl">
+              <h2 className="sr-only">Interactive Orders</h2>
               <OrdersPanel
                 open={ordersPanelOpen}
                 onOpenChange={setOrdersPanelOpen}
@@ -708,11 +845,8 @@ export default function App() {
                 onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
                 highlightedOrderId={highlightedOrderId}
               />
-              <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
-              <McpPanel />
             </div>
-          </div>
-
+          </section>
         </div>
 
         {actionSummary && (
@@ -756,15 +890,6 @@ export default function App() {
                 <Checklist voiceStatuses={voiceSteps} />
               </div>
               <div className="space-y-6">
-                <OrdersPanel
-                  open={ordersPanelOpen}
-                  onOpenChange={setOrdersPanelOpen}
-                  orders={orders}
-                  onAddOrder={(order) => handleAddOrder(order, "ui")}
-                  onDeleteOrder={handleDeleteOrder}
-                  onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
-                  highlightedOrderId={highlightedOrderId}
-                />
                 <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
                 <McpPanel />
               </div>
@@ -782,7 +907,6 @@ export default function App() {
         onResult={setLastResult}
         explainMode={explainMode}
         onCommandExecuted={handleCommandExecuted}
-        listenForConfirmation={isListeningForConfirmation}
       />
       <EventDock />
 
