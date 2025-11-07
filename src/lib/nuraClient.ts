@@ -335,30 +335,21 @@ export class NuraClient {
   }
 
   private parseUpdateOrder(text: string): { name?: string; notes?: string } {
-    const match = text.match(/(?:modifica|actualiza|update)\s+la\s+orden(?:\s+\d+)?\s*(.*)$/i)
-    if (!match) return {}
-    const rest = match[1].trim()
-    if (!rest) return {}
-
-    const separators = [" con nota ", " con notas ", " with note ", " with notes ", " nota:", " note:"]
-    for (const separator of separators) {
-      const index = rest.indexOf(separator)
-      if (index !== -1) {
-        const namePart = rest.slice(0, index).trim()
-        const notesPart = rest.slice(index + separator.length)
-        return {
-          name: namePart ? this.formatOrderText(namePart) : undefined,
-          notes: this.formatOrderText(notesPart),
-        }
-      }
+    // Try to extract notes first
+    const notesMatch = text.match(/(?:con nota|con notas|with note|with notes|nota:|note:)\s+(.*)$/i)
+    if (notesMatch && notesMatch[1]) {
+      const notes = notesMatch[1].trim()
+      return { notes: this.formatOrderText(notes) }
     }
 
-    if (rest.startsWith("a ")) {
-      const newName = rest.replace(/^a\s+/i, "")
+    // Fallback for updating the name directly, e.g., "modifica la orden a 'nuevo nombre'"
+    const nameMatch = text.match(/(?:modifica|actualiza|update)\s+la\s+orden(?:\s+\d+)?\s+a\s+(.*)$/i)
+    if (nameMatch && nameMatch[1]) {
+      const newName = nameMatch[1].trim()
       return { name: this.formatOrderText(newName) }
     }
 
-    return { notes: this.formatOrderText(rest) }
+    return {}
   }
 
   private fuzzyMatch(text: string, locale: "es" | "en"): { intent: string; confidence: number; matchedBy: MatchedBy } {
@@ -668,7 +659,8 @@ export class NuraClient {
     this.context.pendingAction = null
     this.context.confirmDialog = null
     if (current.action === "delete::order") {
-      // This is now the only place that emits the business logic events
+      // This was missing. We need to emit the confirmation event
+      // so that App.tsx knows to actually delete the order.
       eventBus.emit("action.confirmed", { intent: current.action, payload: current.payload })
     }
     return true
