@@ -54,24 +54,6 @@ export default function CommandConsole({
     setLastMessage(message)
   }, [])
 
-  const inputPlaceholder = useMemo(
-    () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
-    [isListening],
-  )
-
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
-        recognitionRef.current = null
-      }
-    }
-  }, [])
-
-  const updateMessage = useCallback((message: string) => {
-    setLastMessage(message)
-  }, [])
-
   const runCommand = useCallback(
     async (command: string, source: "manual" | "voice" = "manual") => {
       const trimmed = command.trim()
