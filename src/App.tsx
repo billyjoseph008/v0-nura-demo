@@ -47,6 +47,29 @@ interface PendingActionState {
   source?: "voice" | "ui"
 }
 
+const guidedExamples = [
+  {
+    title: "Abre el menú de órdenes",
+    description: "Descubre cómo navego por los pedidos con tu voz.",
+    utterance: "ok nura abre el menú de órdenes",
+  },
+  {
+    title: "Elimina una orden",
+    description: "Prueba un flujo con confirmación automática.",
+    utterance: "ok nura elimina la orden quince",
+  },
+  {
+    title: "Confirma la acción",
+    description: "Usa el sí que activa el modo de confirmación.",
+    utterance: "sí, elimínala",
+  },
+  {
+    title: "Muéstrame capacidades",
+    description: "Abre el panel de ayuda y atajos.",
+    utterance: "ok nura muestra capacidades",
+  },
+]
+
 export default function App() {
   const [lastResult, setLastResult] = useState<NuraResult | null>(null)
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false)
@@ -155,6 +178,14 @@ export default function App() {
       highlightTimeout.current = null
     }, 2400)
   }, [])
+
+  const handleExamplePrefill = useCallback(
+    (exampleUtterance: string) => {
+      setConsoleUtterance(exampleUtterance)
+      setActionSummary(`Frase lista: "${exampleUtterance}".`)
+    },
+    [setActionSummary, setConsoleUtterance],
+  )
 
   const openCapabilities = useCallback(
     (source: "ui" | "voice" | "keyboard" = "ui") => {
@@ -654,54 +685,34 @@ export default function App() {
             </div>
           </section>
 
-          <section className="space-y-6">
-            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-8 shadow-[0_20px_60px_rgba(15,118,110,0.25)] backdrop-blur-xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-semibold text-[hsl(var(--foreground))]">¿Qué quieres probar?</h2>
-                  <p className="mt-2 text-sm text-[hsl(var(--foreground))/0.7]">
-                    Selecciona una acción y mira cómo respondo al instante.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          {!lastResult && actionSummary && (
+            <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.3] p-4 text-sm" data-testid="action-summary">
+              {actionSummary}
+            </div>
+          )}
 
-        {!lastResult && actionSummary && (
-          <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.3] p-4 text-sm" data-testid="action-summary">
-            {actionSummary}
-          </div>
-        )}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
+              <Examples onResult={setLastResult} />
+              <Checklist voiceStatuses={voiceSteps} />
+            </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            <CommandConsole
-              onResult={setLastResult}
-              explainMode={explainMode}
-              onExplainModeChange={(value) => applyExplainMode(value, "ui")}
-              onOpenCapabilities={() => openCapabilities("ui")}
-              listenForConfirmation={isListeningForConfirmation}
-              onCommandExecuted={handleCommandExecuted}
-            />
-            <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
-            <Examples onResult={setLastResult} />
-            <Checklist voiceStatuses={voiceSteps} />
+            <div className="space-y-6">
+              <OrdersPanel
+                open={ordersPanelOpen}
+                onOpenChange={setOrdersPanelOpen}
+                orders={orders}
+                onAddOrder={(order) => handleAddOrder(order, "ui")}
+                onDeleteOrder={handleDeleteOrder}
+                onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
+                highlightedOrderId={highlightedOrderId}
+              />
+              <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
+              <McpPanel />
+            </div>
           </div>
 
-          <div className="space-y-6">
-            <OrdersPanel
-              open={ordersPanelOpen}
-              onOpenChange={setOrdersPanelOpen}
-              orders={orders}
-              onAddOrder={(order) => handleAddOrder(order, "ui")}
-              onDeleteOrder={handleDeleteOrder}
-              onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
-              highlightedOrderId={highlightedOrderId}
-            />
-            <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
-            <McpPanel />
-          </div>
         </div>
 
         {actionSummary && (
@@ -771,6 +782,7 @@ export default function App() {
         onResult={setLastResult}
         explainMode={explainMode}
         onCommandExecuted={handleCommandExecuted}
+        listenForConfirmation={isListeningForConfirmation}
       />
       <EventDock />
 
