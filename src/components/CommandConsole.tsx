@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Mic, MicOff, Play, Info, Sparkles } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { nuraClient } from "@/lib/nuraClient"
-import { createSpeechRecognition, getLocaleCode, isSpeechRecognitionSupported } from "@/lib/speech"
+import { createSpeechRecognition, getLocaleCode, isSpeechRecognitionSupported, type SpeechRecognition } from "@/lib/speech"
 import type { NuraResult, Locale, FuzzyStrategy } from "@/lib/types"
 
 interface CommandConsoleProps {
@@ -20,6 +20,7 @@ interface CommandConsoleProps {
   onExplainModeChange: (value: boolean) => void
   onOpenCapabilities: () => void
   onCommandExecuted?: (command: string, source: "manual" | "voice") => void
+  listenForConfirmation?: boolean
 }
 
 export default function CommandConsole({
@@ -28,6 +29,7 @@ export default function CommandConsole({
   onExplainModeChange,
   onOpenCapabilities,
   onCommandExecuted,
+  listenForConfirmation = false,
 }: CommandConsoleProps) {
   const [utterance, setUtterance] = useState("")
   const [isListening, setIsListening] = useState(false)
@@ -38,6 +40,7 @@ export default function CommandConsole({
   const [lastResultText, setLastResultText] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const { toast } = useToast()
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   const runCommand = useCallback(
     async (command: string, source: "manual" | "voice" = "manual") => {
@@ -82,7 +85,16 @@ export default function CommandConsole({
     void runCommand(utterance, "manual")
   }
 
-  const toggleListening = () => {
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      // noop
+    }
+    setIsListening(false)
+  }
+
+  const startListening = () => {
     if (!isSpeechRecognitionSupported()) {
       toast({
         title: "Not Supported",
@@ -92,13 +104,11 @@ export default function CommandConsole({
       return
     }
 
-    if (isListening) {
-      setIsListening(false)
-      return
-    }
+    if (isListening) return
 
     const recognition = createSpeechRecognition()
     if (!recognition) return
+    recognitionRef.current = recognition
 
     recognition.continuous = false
     recognition.interimResults = false
@@ -127,6 +137,25 @@ export default function CommandConsole({
     recognition.start()
     setIsListening(true)
   }
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
+
+  useEffect(() => {
+    if (listenForConfirmation) {
+      // Auto-start listening when a confirmation dialog is open
+      startListening()
+    } else if (isListening) {
+      // Stop listening once confirmation flow ends
+      stopListening()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenForConfirmation])
 
   return (
     <Card>

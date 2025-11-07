@@ -50,6 +50,7 @@ export default function App() {
   const [explainMode, setExplainMode] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null)
   const [actionSummary, setActionSummary] = useState<string | null>(null)
+  const [isListeningForConfirmation, setIsListeningForConfirmation] = useState(false)
   const [ordersPanelOpen, setOrdersPanelOpen] = useState(false)
   const [orders, setOrders] = useState<OrderItem[]>([
     { id: 1, name: "Latte vainilla", notes: "Sin azúcar" },
@@ -366,21 +367,33 @@ export default function App() {
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
       toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      setPendingAction(null)
       return
     }
-    const success = nuraClient.confirmPendingAction()
-    if (!success) {
-      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
+
+    if (pendingAction.intent === "delete::order") {
+      const id = resolveOrderId(pendingAction.payload?.id)
+      if (id !== null) {
+        handleDeleteOrder(id)
+        markStepCompleted("deleteOrder")
+        toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
+        appendVoiceMessage({
+          role: "nura",
+          content: `Orden ${id} eliminada. Checklist completo.`,
+        })
+      }
     }
+    // This is the key: stop listening for confirmation once the action is done.
+    setIsListeningForConfirmation(false)
     setPendingAction(null)
-  }, [pendingAction, toast])
+  }, [pendingAction, resolveOrderId, handleDeleteOrder, markStepCompleted, appendVoiceMessage, toast])
 
   const handleCancel = useCallback(() => {
     if (pendingAction) {
       nuraClient.cancelPendingAction()
-      setPendingAction(null)
     }
-  }, [pendingAction])
+    setPendingAction(null)
+  }, [pendingAction, toast])
 
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
@@ -399,6 +412,8 @@ export default function App() {
       markStepCompleted("openMenu")
       appendVoiceMessage({ role: "nura", content: "Abrí el menú de órdenes, listo para crear o ajustar pedidos." })
       toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
+      // Not a confirmation flow, ensure this is off
+      setIsListeningForConfirmation(false)
     }
     const handlePending = (data: PendingActionState) => {
       setPendingAction(data)
@@ -412,30 +427,18 @@ export default function App() {
         role: "nura",
         content: `${data.description}. Solo confirma y me encargo.`,
       })
+      // This is the magic: automatically start listening for the "yes" or "no".
+      setIsListeningForConfirmation(true)
     }
     const handleCancelled = (data: PendingActionState) => {
       setPendingAction(null)
       toast({ title: "Action cancelled", description: data.description })
+      // We're done with the confirmation flow
+      setIsListeningForConfirmation(false)
       appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
     }
     const handleDeleted = (data: { id?: unknown }) => {
-      setPendingAction(null)
-      const id = data.id ?? "(unknown)"
-      const numericId = resolveOrderId(id)
-      setActionSummary(`Order ${id} deleted.`)
-      toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
-      if (numericId !== null) {
-        setOrders((previous) => previous.filter((order) => order.id !== numericId))
-        ordersRef.current = ordersRef.current.filter((order) => order.id !== numericId)
-        if (highlightedOrderId === numericId) {
-          setHighlightedOrderId(null)
-        }
-      }
-      markStepCompleted("deleteOrder")
-      appendVoiceMessage({
-        role: "nura",
-        content: `Orden ${numericId ?? id} eliminada. Checklist completo.`,
-      })
+      // This logic is now centralized in handleConfirm
     }
     const handleContextConfirm = (data: { previous: PendingActionState }) => {
       const desc = data.previous.description || data.previous.intent
@@ -469,9 +472,7 @@ export default function App() {
     eventBus.on("ui.explain.toggle", handleExplainToggle)
     eventBus.on("voice.wake.fuzzy", handleVoiceWake)
     eventBus.on("ui.menu.open", handleMenuOpen)
-    eventBus.on("action.pending", handlePending)
     eventBus.on("action.cancelled", handleCancelled)
-    eventBus.on("order.deleted", handleDeleted)
     eventBus.on("order.voice.add", handleVoiceAdd)
     eventBus.on("order.voice.update", handleVoiceUpdate)
     eventBus.on("context.confirmation", handleContextConfirm)
@@ -484,6 +485,8 @@ export default function App() {
     eventBus.on("mcp.error", handleMcpError)
     eventBus.on("ui.dialog.confirm", handleDialogConfirmEvent)
     eventBus.on("ui.dialog.cancel", handleDialogCancelEvent)
+    // The action.pending event is the single source of truth to open the dialog
+    eventBus.on("action.pending", handlePending)
 
     return () => {
       eventBus.off("ui.capabilities.open", handleCapabilities)
@@ -491,9 +494,7 @@ export default function App() {
       eventBus.off("ui.explain.toggle", handleExplainToggle)
       eventBus.off("voice.wake.fuzzy", handleVoiceWake)
       eventBus.off("ui.menu.open", handleMenuOpen)
-      eventBus.off("action.pending", handlePending)
       eventBus.off("action.cancelled", handleCancelled)
-      eventBus.off("order.deleted", handleDeleted)
       eventBus.off("order.voice.add", handleVoiceAdd)
       eventBus.off("order.voice.update", handleVoiceUpdate)
       eventBus.off("context.confirmation", handleContextConfirm)
@@ -506,6 +507,7 @@ export default function App() {
       eventBus.off("mcp.error", handleMcpError)
       eventBus.off("ui.dialog.confirm", handleDialogConfirmEvent)
       eventBus.off("ui.dialog.cancel", handleDialogCancelEvent)
+      eventBus.off("action.pending", handlePending)
     }
   }, [
     appendVoiceMessage,
@@ -627,6 +629,7 @@ export default function App() {
               explainMode={explainMode}
               onExplainModeChange={(value) => applyExplainMode(value, "ui")}
               onOpenCapabilities={() => openCapabilities("ui")}
+              listenForConfirmation={isListeningForConfirmation}
               onCommandExecuted={handleCommandExecuted}
             />
             <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
