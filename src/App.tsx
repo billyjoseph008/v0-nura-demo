@@ -1,8 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Link2, Sparkles, Trash2, Wand2 } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+import { Sparkles, Wand2 } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import Header from "@/components/Header"
 import Badges from "@/components/Badges"
@@ -57,7 +56,7 @@ export default function App() {
   const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null)
   const [isListeningForConfirmation, setIsListeningForConfirmation] = useState(false)
   const [actionSummary, setActionSummary] = useState<string | null>(null)
-  const [ordersPanelOpen, setOrdersPanelOpen] = useState(true)
+  const [ordersPanelOpen, setOrdersPanelOpen] = useState(false)
   const [orders, setOrders] = useState<OrderItem[]>([
     { id: 1, name: "Latte vainilla", notes: "Sin azúcar" },
     { id: 2, name: "Sandwich vegano", notes: "Agregar aderezo ligero" },
@@ -392,18 +391,15 @@ export default function App() {
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
       toast({ title: "Sin acciones pendientes", description: "No hay nada que confirmar", variant: "destructive" })
-      setPendingAction(null) // Close dialog just in case
+      setPendingAction(null)
       return
     }
 
-    // The UI is the source of truth for execution.
-    // It calls the nuraClient to execute the business logic.
     const success = nuraClient.confirmPendingAction()
     if (!success) {
       toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
 
-    // This is the key: stop listening for confirmation once the action is done.
     setIsListeningForConfirmation(false)
     setPendingAction(null)
   }, [pendingAction, toast])
@@ -412,7 +408,6 @@ export default function App() {
     if (pendingAction) {
       nuraClient.cancelPendingAction()
     }
-    // This is the key: stop listening for confirmation once the action is done.
     setIsListeningForConfirmation(false)
     setPendingAction(null)
     toast({ title: "Action cancelled" })
@@ -465,55 +460,11 @@ export default function App() {
     eventBus.emit("mcp.request.connect", { source: "menu" })
   }, [])
 
-  const menuActions = useMemo(
-    () =>
-      [
-        {
-          label: "Abrir menú de órdenes",
-          hint: "Gestiona pedidos con un toque mágico.",
-          onClick: () => {
-            setOrdersPanelOpen(true)
-            setActionSummary("Abrí el menú de órdenes para seguir contigo.")
-            eventBus.emit("ui.menu.quick-open", { source: "menu" })
-          },
-          testId: "btn-open-orders",
-          variant: "primary" as const,
-          icon: Sparkles,
-        },
-        {
-          label: "Eliminar orden 15",
-          hint: "Te pido confirmación antes de limpiar la lista.",
-          onClick: handleDeleteOrderPrompt,
-          testId: "btn-delete-15",
-          variant: "destructive" as const,
-          icon: Trash2,
-        },
-        {
-          label: "Capacidades de Nura",
-          hint: "Descubre todo lo que puedo hacer contigo.",
-          onClick: handleCapabilitiesClick,
-          testId: "btn-show-capabilities",
-          variant: "secondary" as const,
-          icon: Wand2,
-        },
-        {
-          label: "Conectar MCP",
-          hint: "Enlazo el puente con tus herramientas externas.",
-          onClick: handleMcpConnectClick,
-          testId: "btn-mcp-connect",
-          variant: "secondary" as const,
-          icon: Link2,
-        },
-      ] satisfies Array<{
-        label: string
-        hint: string
-        onClick: () => void
-        testId: string
-        variant: "primary" | "secondary" | "destructive"
-        icon: LucideIcon
-      }>,
-    [handleCapabilitiesClick, handleDeleteOrderPrompt, handleMcpConnectClick],
-  )
+  const nuraInfo = {
+    title: "¿Qué es Nura?",
+    description:
+      "Interfaz de voz inteligente que transforma comandos naturales en acciones ejecutables. Diseñada para gestión de órdenes con IA conversacional.",
+  }
 
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
@@ -545,7 +496,6 @@ export default function App() {
         role: "nura",
         content: `${data.description}. Solo confirma y me encargo.`,
       })
-      // This is the magic: automatically start listening for the "yes" or "no".
       setIsListeningForConfirmation(true)
     }
     const handleCancelled = (data: PendingActionState) => {
@@ -592,7 +542,11 @@ export default function App() {
       setActionSummary(`Listé ${data.count ?? 0} herramientas de MCP.`)
     }
     const handleMcpError = (data: { error?: string }) => {
-      toast({ title: "Algo falló con MCP", description: data.error ?? "No pude completar la acción", variant: "destructive" })
+      toast({
+        title: "Algo falló con MCP",
+        description: data.error ?? "No pude completar la acción",
+        variant: "destructive",
+      })
     }
     const handleDialogConfirmEvent = () => {
       handleConfirm()
@@ -623,7 +577,6 @@ export default function App() {
     eventBus.on("ui.dialog.cancel", handleDialogCancelEvent)
     eventBus.on("action.confirmed", handleActionConfirmed)
     eventBus.on("ui.explain.toggle", handleExplainToggle)
-    // The action.pending event is the single source of truth to open the dialog
     eventBus.on("action.pending", handlePending)
 
     return () => {
@@ -741,75 +694,121 @@ export default function App() {
   })
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),_transparent_65%),_radial-gradient(circle_at_bottom,_rgba(52,211,153,0.2),_transparent_70%)] text-[hsl(var(--foreground))]">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.25),_transparent_60%),radial-gradient(circle_at_bottom_right,_rgba(6,182,212,0.18),_transparent_70%)]" />
-      <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-36 pt-16 sm:px-6 lg:px-10">
-        <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-black via-slate-950 to-purple-950/20">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.15),transparent_50%),radial-gradient(ellipse_at_bottom_right,rgba(139,92,246,0.15),transparent_50%)]" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        {/* Sparkles flotantes */}
+        <div className="absolute top-20 left-1/4 animate-float">
+          <Sparkles className="w-4 h-4 text-blue-400/40" />
+        </div>
+        <div className="absolute top-40 right-1/3 animate-float animation-delay-2000">
+          <Sparkles className="w-3 h-3 text-purple-400/40" />
+        </div>
+        <div className="absolute bottom-40 left-1/3 animate-float animation-delay-4000">
+          <Sparkles className="w-5 h-5 text-cyan-400/40" />
+        </div>
+        <div className="absolute top-1/2 right-1/4 animate-float animation-delay-3000">
+          <Sparkles className="w-4 h-4 text-indigo-400/40" />
+        </div>
+      </div>
+
+      <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-36 pt-16 sm:px-6 lg:px-10">
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
           <section
             data-testid="guided-demo"
-            className="relative overflow-hidden rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.65] p-8 shadow-[0_25px_80px_rgba(99,102,241,0.25)] backdrop-blur-xl transition-all duration-500"
+            className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-purple-950/40 p-8 shadow-[0_0_80px_rgba(59,130,246,0.3)] backdrop-blur-2xl transition-all duration-700 hover:shadow-[0_0_100px_rgba(139,92,246,0.4)] hover:scale-[1.01]"
           >
-            <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(129,140,248,0.15),_transparent_55%)]" />
-            <div className="flex items-center gap-3 text-sm font-medium text-primary">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 shadow-[0_0_20px_rgba(129,140,248,0.45)]">
-                <Sparkles className="h-4 w-4" />
+            <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.1),transparent_70%)]" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
+
+            <div className="flex items-center gap-3 text-sm font-medium text-white">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/30 to-purple-500/30 shadow-[0_0_30px_rgba(59,130,246,0.5)] backdrop-blur-sm animate-pulse">
+                <Sparkles className="h-5 w-5 text-cyan-200" />
               </span>
-              Bienvenido a Nura
-            </div>
-            <h1 className="mt-6 text-3xl font-semibold leading-tight text-[hsl(var(--foreground))] sm:text-4xl">
-              Tu asistente de voz, sin tecnicismos
-            </h1>
-            <p className="mt-4 max-w-xl text-base text-[hsl(var(--foreground))/0.75]">
-              Lanza frases sencillas y déjame interpretar tu intención, ejecutar acciones y contarte cada paso con lenguaje claro y cercano.
-            </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              {guidedExamples.map((example) => (
-                <button
-                  key={example.utterance}
-                  type="button"
-                  onClick={() => handleExamplePrefill(example.utterance)}
-                  className="group relative overflow-hidden rounded-2xl border border-[hsl(var(--border))/50] bg-[hsl(var(--muted))/0.3] px-4 py-3 text-left transition-all duration-500 hover:scale-[1.01] hover:border-primary/60 hover:bg-primary/10"
-                >
-                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{example.title}</div>
-                  <p className="mt-1 text-xs text-[hsl(var(--foreground))/0.7]">{example.description}</p>
-                  <span className="absolute -right-8 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full bg-primary/20 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
-                </button>
-              ))}
+              Demo Guiada por Voz
             </div>
 
-            <div className="mt-10 space-y-3">
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))/0.85]">Atajos rápidos</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {menuActions.map((action) => {
-                  const Icon = action.icon
-                  return (
-                    <button
-                      key={action.testId}
-                      type="button"
-                      data-testid={action.testId}
-                      onClick={action.onClick}
-                      className={`group flex flex-col gap-1 rounded-2xl border px-4 py-3 text-left transition-all duration-500 hover:scale-[1.01] hover:shadow-[0_25px_60px_rgba(129,140,248,0.35)] ${
-                        action.variant === "primary"
-                          ? "border-primary/60 bg-primary/20 text-[hsl(var(--foreground))]"
-                          : action.variant === "destructive"
-                            ? "border-rose-500/40 bg-rose-500/15 text-[hsl(var(--foreground))] hover:border-rose-400/60"
-                            : "border-[hsl(var(--border))/60] bg-[hsl(var(--muted))/0.3]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 text-sm font-semibold">
-                        <Icon className="h-4 w-4" />
-                        {action.label}
-                      </div>
-                      <p className="text-xs text-[hsl(var(--foreground))/0.7]">{action.hint}</p>
-                    </button>
-                  )
-                })}
+            <h1 className="mt-6 text-4xl font-bold leading-tight bg-gradient-to-r from-white via-white to-cyan-100 bg-clip-text text-transparent sm:text-5xl animate-gradient">
+              Nura Voice Interface
+            </h1>
+
+            <p className="mt-4 max-w-xl text-base text-white leading-relaxed font-medium">
+              Interfaz de voz inteligente que transforma comandos naturales en acciones ejecutables. Habla naturalmente
+              y observa la magia.
+            </p>
+
+            <div className="mt-8">
+              <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
+            </div>
+
+            <div className="mt-8 space-y-3">
+              <p className="text-sm font-semibold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Ejemplos para comenzar
+              </p>
+              <div className="grid gap-3 sm:grid-cols-1">
+                {guidedExamples.map((example, idx) => (
+                  <button
+                    key={example.utterance}
+                    type="button"
+                    onClick={() => handleExamplePrefill(example.utterance)}
+                    className="group relative overflow-hidden rounded-2xl border border-blue-500/30 bg-gradient-to-br from-slate-950/80 to-slate-950/80 px-5 py-4 text-left transition-all duration-500 hover:scale-[1.02] hover:border-blue-400/60 hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] animate-fade-in-up backdrop-blur-sm"
+                    style={{ animationDelay: `${idx * 100}ms` }}
+                  >
+                    <div className="text-sm font-semibold text-white">{example.title}</div>
+                    <p className="mt-1 text-xs text-slate-100">{example.description}</p>
+                    <span className="absolute -right-8 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
+                    <Sparkles className="absolute top-3 right-3 w-3 h-3 text-blue-400/0 group-hover:text-blue-400/60 transition-all duration-300" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/40 to-slate-950/60 p-4 backdrop-blur-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/30 to-blue-500/30">
+                    <Wand2 className="h-4 w-4 text-purple-200" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-sm text-white mb-1">{nuraInfo.title}</h4>
+                  <p className="text-xs text-slate-100 leading-relaxed">{nuraInfo.description}</p>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="relative h-full">
-            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-6 shadow-[0_20px_60px_rgba(15,118,110,0.25)] backdrop-blur-xl">
+          <section
+            className={`relative h-full transition-all duration-700 ${ordersPanelOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}
+          >
+            {ordersPanelOpen && (
+              <>
+                <div className="absolute -top-4 -left-4 animate-sparkle-orbit">
+                  <Sparkles className="w-6 h-6 text-cyan-400" />
+                </div>
+                <div className="absolute -top-2 -right-6 animate-sparkle-orbit animation-delay-1000">
+                  <Sparkles className="w-5 h-5 text-blue-400" />
+                </div>
+                <div className="absolute top-1/4 -left-6 animate-sparkle-orbit animation-delay-2000">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="absolute top-1/2 -right-8 animate-sparkle-orbit animation-delay-1500">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div className="absolute bottom-1/4 -left-4 animate-sparkle-orbit animation-delay-3000">
+                  <Sparkles className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div className="absolute -bottom-4 -right-6 animate-sparkle-orbit animation-delay-500">
+                  <Sparkles className="w-4 h-4 text-blue-300" />
+                </div>
+              </>
+            )}
+            <div
+              className={`rounded-3xl border border-cyan-500/20 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-cyan-900/30 p-6 shadow-[0_0_80px_rgba(6,182,212,0.3)] backdrop-blur-2xl ${ordersPanelOpen ? "animate-magical-appear" : ""}`}
+            >
               <OrdersPanel
                 open={ordersPanelOpen}
                 onOpenChange={setOrdersPanelOpen}
@@ -824,17 +823,18 @@ export default function App() {
         </div>
 
         {actionSummary && (
-          <div className="mt-12">
+          <div className="mt-12 animate-fade-in-up">
             <div
-              className="rounded-3xl border border-[hsl(var(--border))/50] bg-[hsl(var(--card))/0.6] px-6 py-4 text-sm text-[hsl(var(--foreground))] shadow-[0_20px_60px_rgba(14,165,233,0.25)] backdrop-blur-xl"
+              className="rounded-3xl border border-blue-500/30 bg-gradient-to-r from-slate-900/80 via-blue-900/20 to-purple-900/20 px-6 py-4 text-sm text-blue-100 shadow-[0_0_60px_rgba(59,130,246,0.3)] backdrop-blur-xl"
               data-testid="action-summary"
             >
+              <Sparkles className="inline w-4 h-4 mr-2 text-blue-400" />
               {actionSummary}
             </div>
           </div>
         )}
 
-        <div className="mt-10 flex items-center justify-center">
+        <div className="mt-16 flex items-center justify-center">
           <Button
             type="button"
             variant="outline"
@@ -842,33 +842,51 @@ export default function App() {
             data-testid="btn-advanced-toggle"
             aria-expanded={showAdvanced}
             aria-controls="advanced"
-            className="rounded-2xl border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.5] px-6 py-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_10px_40px_rgba(129,140,248,0.25)] backdrop-blur-lg transition-all duration-300 hover:scale-[1.02] hover:border-primary/60 hover:bg-primary/20"
+            className="group relative overflow-hidden rounded-2xl border-purple-500/30 bg-gradient-to-r from-slate-900/80 to-purple-900/40 px-8 py-4 text-sm font-medium text-purple-200 shadow-[0_0_40px_rgba(139,92,246,0.3)] backdrop-blur-lg transition-all duration-500 hover:scale-[1.05] hover:border-purple-400/60 hover:shadow-[0_0_60px_rgba(139,92,246,0.5)]"
           >
-            {showAdvanced ? "Ocultar herramientas avanzadas" : "Mostrar herramientas avanzadas"}
+            <span className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-purple-500/20 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <Sparkles className="inline w-4 h-4 mr-2" />
+            {showAdvanced ? "Ocultar herramientas técnicas" : "Mostrar herramientas técnicas"}
           </Button>
         </div>
 
         <div
           id="advanced"
-          className={`mt-8 overflow-hidden transition-all duration-500 ease-out ${
-            showAdvanced ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+          className={`mt-8 overflow-hidden transition-all duration-700 ease-out ${
+            showAdvanced ? "max-h-[5000px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
           }`}
         >
-          <div className="space-y-10 rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.55] p-8 shadow-[0_30px_120px_rgba(99,102,241,0.35)] backdrop-blur-2xl">
+          <div className="space-y-10 rounded-3xl border border-purple-500/20 bg-gradient-to-br from-slate-900/80 via-purple-900/10 to-slate-900/80 p-8 shadow-[0_0_120px_rgba(139,92,246,0.4)] backdrop-blur-2xl animate-fade-in-up">
             <Header />
             {lastResult && <Badges result={lastResult} />}
+
             <div className="grid gap-8 lg:grid-cols-2">
               <div className="space-y-6">
-                <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
-                <Examples onResult={setLastResult} />
-                <Checklist voiceStatuses={voiceSteps} />
+                <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 backdrop-blur-sm">
+                  <Telemetry
+                    lastResult={lastResult}
+                    highlight={telemetryHighlight}
+                    onOpenModal={() => openTelemetry("ui")}
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 backdrop-blur-sm">
+                  <Examples onResult={setLastResult} />
+                </div>
+
+                <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 backdrop-blur-sm">
+                  <Checklist voiceStatuses={voiceSteps} />
+                </div>
               </div>
+
               <div className="space-y-6">
-                <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
-                <McpPanel />
+                <div className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-slate-800/50 to-slate-900/50 p-6 backdrop-blur-sm">
+                  <McpPanel />
+                </div>
               </div>
             </div>
           </div>
+
           <div className="mt-8">
             <Footer />
           </div>
@@ -902,19 +920,30 @@ export default function App() {
       />
 
       <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => (!open ? handleCancel() : null)}>
-        <DialogContent>
+        <DialogContent className="border-purple-500/30 bg-gradient-to-br from-slate-900/95 to-purple-950/30 backdrop-blur-2xl">
           <div data-testid="confirm-dialog" className="space-y-4">
             <DialogHeader>
-              <DialogTitle>¿Lo confirmamos?</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-blue-100">¿Lo confirmamos?</DialogTitle>
+              <DialogDescription className="text-slate-400">
                 {pendingAction?.description ?? "¿Quieres que continúe con esta acción?"}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="ghost" onClick={handleCancel} data-testid="confirm-no" nuraAction="cancel">
+              <Button
+                variant="ghost"
+                onClick={handleCancel}
+                data-testid="confirm-no"
+                nuraAction="cancel"
+                className="hover:bg-slate-800/50"
+              >
                 No por ahora
               </Button>
-              <Button onClick={handleConfirm} data-testid="confirm-yes" nuraAction="confirm">
+              <Button
+                onClick={handleConfirm}
+                data-testid="confirm-yes"
+                nuraAction="confirm"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-[0_0_30px_rgba(59,130,246,0.4)]"
+              >
                 Sí, hazlo
               </Button>
             </DialogFooter>

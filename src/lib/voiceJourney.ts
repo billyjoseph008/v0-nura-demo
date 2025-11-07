@@ -16,7 +16,7 @@ export const voiceStepOrder: VoiceStepId[] = ["openMenu", "addOrder", "updateOrd
 export const voiceStepMeta: Record<VoiceStepId, { title: string; description: string; suggestion: string }> = {
   openMenu: {
     title: "Abre el menú de órdenes",
-    description: "Despierta a Nura con \"ok nura\" y pide que abra el panel interactivo de órdenes.",
+    description: 'Despierta a Nura con "ok nura" y pide que abra el panel interactivo de órdenes.',
     suggestion: 'Frase sugerida: "ok nura abre el menú de órdenes"',
   },
   addOrder: {
@@ -34,6 +34,13 @@ export const voiceStepMeta: Record<VoiceStepId, { title: string; description: st
     description: "Confirma la eliminación con el flujo de doble verificación por voz.",
     suggestion: 'Frase sugerida: "ok nura elimina la orden dos" y luego "sí, elimínala"',
   },
+}
+
+export const voiceStepLabels: Record<VoiceStepId, string> = {
+  openMenu: voiceStepMeta.openMenu.title,
+  addOrder: voiceStepMeta.addOrder.title,
+  updateOrder: voiceStepMeta.updateOrder.title,
+  deleteOrder: voiceStepMeta.deleteOrder.title,
 }
 
 export const createInitialVoiceState = (): VoiceStepStatusMap => ({
