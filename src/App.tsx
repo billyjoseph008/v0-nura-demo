@@ -48,29 +48,6 @@ interface PendingActionState {
   source?: "voice" | "ui"
 }
 
-const guidedExamples = [
-  {
-    title: "Abre el menú de órdenes",
-    description: "Descubre cómo navego por los pedidos con tu voz.",
-    utterance: "ok nura abre el menú de órdenes",
-  },
-  {
-    title: "Elimina una orden",
-    description: "Prueba un flujo con confirmación automática.",
-    utterance: "ok nura elimina la orden quince",
-  },
-  {
-    title: "Confirma la acción",
-    description: "Usa el sí que activa el modo de confirmación.",
-    utterance: "sí, elimínala",
-  },
-  {
-    title: "Muéstrame capacidades",
-    description: "Abre el panel de ayuda y atajos.",
-    utterance: "ok nura muestra capacidades",
-  },
-]
-
 export default function App() {
   const [lastResult, setLastResult] = useState<NuraResult | null>(null)
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false)
@@ -183,6 +160,7 @@ export default function App() {
     (exampleUtterance: string) => {
       setConsoleUtterance(exampleUtterance)
       setActionSummary(`Frase lista: "${exampleUtterance}".`)
+      eventBus.emit("ui.examples.prefill", { utterance: exampleUtterance })
     },
     [setActionSummary, setConsoleUtterance],
   )
@@ -460,12 +438,6 @@ export default function App() {
     ],
     [],
   )
-
-  const handleExamplePrefill = useCallback((phrase: string) => {
-    setConsoleUtterance(phrase)
-    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
-    eventBus.emit("ui.examples.prefill", { utterance: phrase })
-  }, [])
 
   const handleDeleteOrderPrompt = useCallback(() => {
     setPendingAction({
