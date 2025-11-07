@@ -338,19 +338,29 @@ export default function App() {
   )
 
   const handleDeleteOrder = useCallback(
-    (id: number) => {
-      const target = orders.find((order) => order.id === id)
-      setOrders((previous) => previous.filter((order) => order.id !== id))
-      ordersRef.current = ordersRef.current.filter((order) => order.id !== id)
-      if (target) {
+    (id: number, source: "ui" | "voice" = "ui") => {
+      setOrders((previous) => {
+        const target = previous.find((order) => order.id === id)
+        if (!target) return previous
+
+        const nextOrders = previous.filter((order) => order.id !== id)
+        ordersRef.current = nextOrders
+
         setActionSummary(`Eliminé ${target.name} de la lista.`)
         toast({
           title: "Orden eliminada",
           description: target.notes ? `${target.name} · ${target.notes}` : target.name,
+          variant: source === "voice" ? "success" : "default",
         })
-      }
+
+        if (source === "voice") {
+          markStepCompleted("deleteOrder")
+          appendVoiceMessage({ role: "nura", content: `Listo, eliminé la orden ${target.name}.` })
+        }
+        return nextOrders
+      })
     },
-    [orders, toast],
+    [toast, markStepCompleted, appendVoiceMessage],
   )
 
   const handleVoiceAdd = useCallback(
@@ -553,7 +563,8 @@ export default function App() {
       handleCancel()
     }
     const handleActionConfirmed = (data: { intent: string; payload?: Record<string, unknown> }) => {
-      handleDeleteOrder(resolveOrderId(data.payload?.id)!)
+      const orderId = resolveOrderId(data.payload?.id)
+      if (orderId !== null) handleDeleteOrder(orderId, "voice")
     }
 
     eventBus.on("ui.capabilities.open", handleCapabilities)
