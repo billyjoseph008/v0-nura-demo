@@ -1,0 +1,12 @@
+{
+  "name": "@playwright/test",
+  "version": "0.0.0-mock",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "playwright": "./dist/cli.js"
+  },
+  "dependencies": {
+    "typescript": "^5.9.3"
+  }
+}

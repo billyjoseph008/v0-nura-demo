@@ -5,9 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:labs": "NURA_DEMO_PLUS=true VITE_NURA_DEMO_PLUS=true vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "node scripts/setup-test-runner.mjs vitest",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "pretest:e2e": "node scripts/setup-test-runner.mjs playwright",
+    "test:e2e": "playwright test e2e/labs-*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.16",
@@ -19,9 +25,17 @@
     "tailwindcss": "^4.1.16",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.9.3",
-    "vite": "^7.2.0"
+    "vite": "^7.2.0",
+    "vitest": "file:vendor/vitest",
+    "@playwright/test": "file:vendor/playwright-test"
   },
   "dependencies": {
+    "@nura/client": "file:vendor/nura-client",
+    "@nura/core": "file:vendor/nura-core",
+    "@nura/intents": "file:vendor/nura-intents",
+    "@nura/react": "file:vendor/nura-react",
+    "@nura/transport-http": "file:vendor/nura-transport-http",
+    "@axe-core/playwright": "file:vendor/axe-core-playwright",
     "lucide-react": "^0.454.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
