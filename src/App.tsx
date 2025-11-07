@@ -159,7 +159,7 @@ export default function App() {
   const handleExamplePrefill = useCallback(
     (exampleUtterance: string) => {
       setConsoleUtterance(exampleUtterance)
-      setActionSummary(`Frase lista: "${exampleUtterance}".`)
+      setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
       eventBus.emit("ui.examples.prefill", { utterance: exampleUtterance })
     },
     [setActionSummary, setConsoleUtterance],
@@ -438,12 +438,6 @@ export default function App() {
     ],
     [],
   )
-
-  const handleExamplePrefill = useCallback((phrase: string) => {
-    setConsoleUtterance(phrase)
-    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
-    eventBus.emit("ui.examples.prefill", { utterance: phrase })
-  }, [])
 
   const handleDeleteOrderPrompt = useCallback(() => {
     setPendingAction({
