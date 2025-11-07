@@ -16,6 +16,7 @@ interface CommandConsoleProps {
   onResult: (result: NuraResult) => void
   explainMode: boolean
   onCommandExecuted?: (command: string, source: "manual" | "voice") => void
+  listenForConfirmation?: boolean
 }
 
 export default function CommandConsole({
@@ -24,6 +25,7 @@ export default function CommandConsole({
   onResult,
   explainMode,
   onCommandExecuted,
+  listenForConfirmation = false,
 }: CommandConsoleProps) {
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -33,6 +35,7 @@ export default function CommandConsole({
   const locale: Locale = "auto"
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const { toast } = useToast()
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   const inputPlaceholder = useMemo(
     () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
