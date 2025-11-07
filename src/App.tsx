@@ -297,47 +297,45 @@ export default function App() {
 
   const handleUpdateOrder = useCallback(
     (update: { id: number; name?: string; notes?: string }, source: "ui" | "voice" = "ui") => {
-      let updatedOrder: OrderItem | null = null
       setOrders((previous) => {
         const exists = previous.find((order) => order.id === update.id)
         if (!exists) {
+          toast({
+            title: "No encontré la orden",
+            description: "Necesito una orden existente para actualizarla",
+            variant: "destructive",
+          })
           return previous
         }
-        updatedOrder = {
+
+        const updatedOrder: OrderItem = {
           ...exists,
           name: update.name?.trim() ? update.name : exists.name,
           notes: update.notes?.trim() ? update.notes : exists.notes,
         }
-        return previous.map((order) => (order.id === update.id ? updatedOrder! : order))
-      })
 
-      if (!updatedOrder) {
+        // This logic now runs inside the state updater, where it's safe
+        ordersRef.current = previous.map((order) => (order.id === updatedOrder.id ? updatedOrder : order))
+        setOrdersPanelOpen(true)
+        setActionSummary(`Actualicé ${updatedOrder.name} tal como querías.`)
         toast({
-          title: "No encontré la orden",
-          description: "Necesito una orden existente para actualizarla",
-          variant: "destructive",
+          title: "Orden actualizada",
+          description: updatedOrder.notes ? `${updatedOrder.name} · ${updatedOrder.notes}` : updatedOrder.name,
+          variant: source === "voice" ? "success" : "default",
         })
-        return
-      }
+        flashOrderHighlight(updatedOrder.id)
+        if (source === "voice") {
+          markStepCompleted("updateOrder")
+          appendVoiceMessage({
+            role: "nura",
+            content: `Actualicé la orden ${updatedOrder.name}${updatedOrder.notes ? ` · ${updatedOrder.notes}` : ""}.`,
+          })
+        }
 
-      ordersRef.current = ordersRef.current.map((order) => (order.id === updatedOrder!.id ? updatedOrder! : order))
-      setOrdersPanelOpen(true)
-      setActionSummary(`Actualicé ${updatedOrder.name} tal como querías.`)
-      toast({
-        title: "Orden actualizada",
-        description: updatedOrder.notes ? `${updatedOrder.name} · ${updatedOrder.notes}` : updatedOrder.name,
-        variant: source === "voice" ? "success" : "default",
+        return ordersRef.current
       })
-      flashOrderHighlight(updatedOrder.id)
-      if (source === "voice") {
-        markStepCompleted("updateOrder")
-        appendVoiceMessage({
-          role: "nura",
-          content: `Actualicé la orden ${updatedOrder.name}${updatedOrder.notes ? ` · ${updatedOrder.notes}` : ""}.`,
-        })
-      }
     },
-    [appendVoiceMessage, flashOrderHighlight, markStepCompleted, toast],
+    [appendVoiceMessage, flashOrderHighlight, markStepCompleted, toast], // Dependencies are correct without `orders` because we use the updater function form of `setOrders`
   )
 
   const handleDeleteOrder = useCallback(
