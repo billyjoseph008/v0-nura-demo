@@ -15,7 +15,18 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@nura/core": ["vendor/nura-core/dist/index"],
+      "@nura/client": ["vendor/nura-client/dist/index"],
+      "@nura/react": ["vendor/nura-react/dist/index"],
+      "@nura/transport-http": ["vendor/nura-transport-http/dist/index"],
+      "@nura/intents": ["vendor/nura-intents/dist/index"],
+      "vitest": ["vendor/vitest/dist/index"],
+      "@playwright/test": ["vendor/playwright-test/dist/index"]
+    }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

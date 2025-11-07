@@ -4,6 +4,8 @@ A professional, interactive demo application showcasing all core features of the
 
 ## Features
 
+> **Novedad:** Explora las [experiencias Labs](#-nuevas-funcionalidades-en-la-demo-labs) para ver los intents aprobados, el transporte seguro y las capacidades de voz/locale funcionando con los SDK de `@nura/*`.
+
 - **Voice Recognition**: Web Speech API integration with multi-language support (ES/EN/es-419)
 - **Wake Word Detection**: Phonetic matching for "ok nura" and aliases
 - **Fuzzy Intent Matching**: Multiple strategies (Damerau, Soundex, Double Metaphone, Hybrid)
@@ -31,7 +33,7 @@ pnpm e2e
 pnpm build
 \`\`\`
 
-## Usage
+## Demo sencillo
 
 1. **Type or speak commands** in the Command Console
 2. **Adjust settings**: threshold, strategy, locale, explain mode
@@ -59,7 +61,37 @@ pnpm build
 - `t` - Toggle telemetry modal highlight
 - `e` - Toggle explain mode on/off
 
-## Architecture
+## 🔬 Nuevas funcionalidades en la demo (Labs)
+
+Inicia la versión extendida con:
+
+```bash
+NURA_DEMO_PLUS=true VITE_NURA_DEMO_PLUS=true npm run dev:labs
+```
+
+Rutas principales:
+
+- `/labs` – índice de experimentos.
+- `/labs/intents` – flujo Intent → Approval → Execute con validación y log.
+- `/labs/transport` – endpoint seguro `/api/labs/secure-intent` con rate-limit en memoria.
+- `/labs/client` – dispatcher de `@nura/client` mostrando `on`/`dispatch` en acción.
+- `/labs/voice` – análisis de wake words y activación visual de paneles.
+- `/labs/locale` – numerales, sinónimos normalizados y confirmación contextual.
+
+Diagrama IAE (Intent → Approval → Execute):
+
+```
+Intent recibido
+        │
+        ▼
+  Validación rápida ──¿aprobado automáticamente?──► Ejecutar acción
+        │                               │
+        └─────────► Solicitar aprobación ────────┘
+```
+
+Cada laboratorio incluye selectores `data-testid`/`data-nura-command` para pruebas y automatización.
+
+## Sección técnica
 
 - **React 18** + **Vite** + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui** components

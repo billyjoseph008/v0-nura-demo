@@ -1,0 +1,7 @@
+{
+  "name": "@axe-core/playwright",
+  "version": "0.0.0-mock",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}
