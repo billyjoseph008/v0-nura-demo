@@ -509,6 +509,17 @@ export class NuraClient {
   async process(utterance: string): Promise<NuraResult> {
     const timestamp = Date.now()
 
+    // If a new command comes in that is not a confirmation/cancellation,
+    // and there is a pending action, cancel the pending action first.
+    if (pendingAction) {
+      const isConfirmationAttempt = this.checkContext(utterance)
+      if (!isConfirmationAttempt) {
+        this.cancelPendingAction()
+        // A small delay to allow state to propagate before processing the new command
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+    }
+
     // Check context first
     const contextMatch = this.checkContext(utterance)
     if (contextMatch) {

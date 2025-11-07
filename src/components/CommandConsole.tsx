@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { eventBus } from "@/lib/telemetry"
 import { Mic, MicOff, Play, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -165,11 +166,27 @@ export default function CommandConsole({
   }, [isListening, locale, isProcessing, onUtteranceChange, runCommand, toast, updateMessage])
 
   useEffect(() => {
-    // If the app wants us to listen for a confirmation, and we are not already listening, start.
-    if (listenForConfirmation && !isListening) {
+    if (listenForConfirmation) {
       toggleListening()
     }
-  }, [listenForConfirmation, isListening, toggleListening])
+    // We only want this to run when listenForConfirmation becomes true.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenForConfirmation])
+
+  useEffect(() => {
+    const stopListening = () => {
+      if (isListening && recognitionRef.current) {
+        recognitionRef.current.stop()
+        setIsListening(false)
+      }
+    }
+
+    eventBus.on("voice.confirmation.cancel", stopListening)
+
+    return () => {
+      eventBus.off("voice.confirmation.cancel", stopListening)
+    }
+  }, [isListening])
 
   return (
     <div
