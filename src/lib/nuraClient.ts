@@ -662,6 +662,11 @@ export class NuraClient {
   confirmPendingAction(): boolean {
     if (!pendingAction) return false
     const current = pendingAction
+    // Emit UI confirm click so the modal closes in the app
+    eventBus.emit("ui.dialog.confirm", {
+      intent: this.context.confirmDialog?.intent ?? "dialog::confirm",
+      context: this.context.confirmDialog ?? undefined,
+    })
     pendingAction = null
     this.context.pendingAction = null
     this.context.confirmDialog = null
@@ -676,6 +681,11 @@ export class NuraClient {
   cancelPendingAction(): void {
     if (!pendingAction) return
     const current = pendingAction
+    // Emit UI cancel click so the modal closes in the app
+    eventBus.emit("ui.dialog.cancel", {
+      intent: this.context.confirmDialog?.intent ?? "dialog::cancel",
+      context: this.context.confirmDialog ?? undefined,
+    })
     pendingAction = null
     this.context.pendingAction = null
     this.context.confirmDialog = null
