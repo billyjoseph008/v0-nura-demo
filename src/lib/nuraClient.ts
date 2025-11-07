@@ -471,6 +471,8 @@ export class NuraClient {
     const affirmatives = [
       "sí",
       "si",
+      "elimínalo",
+      "eliminalo",
       "yes",
       "ok",
       "elimínala",
@@ -494,20 +496,20 @@ export class NuraClient {
     ]
     const lowerText = text.toLowerCase()
 
-    if (pendingAction && affirmatives.some((a) => lowerText.includes(a))) {
-      const previous = pendingAction
-      const executed = this.confirmPendingAction()
-      if (executed) {
-        eventBus.emit("context.confirmation", { previous, confirmed: true })
-        return { intent: previous.action, confidence: 0.95, payload: previous.payload }
+    // This is the key part for voice confirmation.
+    // It checks if a dialog is open and if the user is confirming/cancelling.
+    if (this.context.confirmDialog) {
+      if (affirmatives.some((a) => lowerText.includes(a))) {
+        // It only emits the UI event, simulating a click. App.tsx will handle the rest.
+        eventBus.emit("ui.dialog.confirm", {})
+        return { intent: "confirm::last-action", confidence: 0.95, payload: pendingAction?.payload }
       }
-    }
 
-    if (pendingAction && negatives.some((a) => lowerText.includes(a))) {
-      const previous = pendingAction
-      this.cancelPendingAction()
-      eventBus.emit("context.confirmation", { previous, confirmed: false })
-      return { intent: "cancel::last-action", confidence: 0.9, payload: previous.payload }
+      if (negatives.some((a) => lowerText.includes(a))) {
+        // It only emits the UI event, simulating a click. App.tsx will handle the rest.
+        eventBus.emit("ui.dialog.cancel", {})
+        return { intent: "cancel::last-action", confidence: 0.9, payload: pendingAction?.payload }
+      }
     }
 
     return null
@@ -662,17 +664,11 @@ export class NuraClient {
   confirmPendingAction(): boolean {
     if (!pendingAction) return false
     const current = pendingAction
-    // Emit UI confirm click so the modal closes in the app
-    eventBus.emit("ui.dialog.confirm", {
-      intent: this.context.confirmDialog?.intent ?? "dialog::confirm",
-      context: this.context.confirmDialog ?? undefined,
-    })
     pendingAction = null
     this.context.pendingAction = null
     this.context.confirmDialog = null
     if (current.action === "delete::order") {
-      eventBus.emit("order.delete", { id: current.payload?.id })
-      eventBus.emit("order.deleted", { id: current.payload?.id })
+      // This is now the only place that emits the business logic events
       eventBus.emit("action.confirmed", { intent: current.action, payload: current.payload })
     }
     return true
@@ -681,11 +677,6 @@ export class NuraClient {
   cancelPendingAction(): void {
     if (!pendingAction) return
     const current = pendingAction
-    // Emit UI cancel click so the modal closes in the app
-    eventBus.emit("ui.dialog.cancel", {
-      intent: this.context.confirmDialog?.intent ?? "dialog::cancel",
-      context: this.context.confirmDialog ?? undefined,
-    })
     pendingAction = null
     this.context.pendingAction = null
     this.context.confirmDialog = null

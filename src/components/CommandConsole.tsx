@@ -16,7 +16,7 @@ interface CommandConsoleProps {
   onResult: (result: NuraResult) => void
   explainMode: boolean
   onCommandExecuted?: (command: string, source: "manual" | "voice") => void
-  listenForConfirmation?: boolean
+  listenForConfirmation: boolean
 }
 
 export default function CommandConsole({
@@ -25,7 +25,7 @@ export default function CommandConsole({
   onResult,
   explainMode,
   onCommandExecuted,
-  listenForConfirmation = false,
+  listenForConfirmation,
 }: CommandConsoleProps) {
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -181,6 +181,13 @@ export default function CommandConsole({
     setIsListening(true)
     updateMessage("Te escucho, habla con calma.")
   }, [isListening, locale, isProcessing, onUtteranceChange, runCommand, toast, updateMessage])
+
+  useEffect(() => {
+    // If the app wants us to listen for a confirmation, and we are not already listening, start.
+    if (listenForConfirmation && !isListening) {
+      toggleListening()
+    }
+  }, [listenForConfirmation, isListening, toggleListening])
 
   return (
     <div

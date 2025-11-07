@@ -55,6 +55,7 @@ export default function App() {
   const [telemetryHighlight, setTelemetryHighlight] = useState(false)
   const [explainMode, setExplainMode] = useState(false)
   const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null)
+  const [isListeningForConfirmation, setIsListeningForConfirmation] = useState(false)
   const [actionSummary, setActionSummary] = useState<string | null>(null)
   const [ordersPanelOpen, setOrdersPanelOpen] = useState(true)
   const [orders, setOrders] = useState<OrderItem[]>([
@@ -391,32 +392,31 @@ export default function App() {
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
       toast({ title: "Sin acciones pendientes", description: "No hay nada que confirmar", variant: "destructive" })
+      setPendingAction(null) // Close dialog just in case
       return
     }
 
-    if (pendingAction.onConfirm) {
-      pendingAction.onConfirm()
-      setPendingAction(null)
-      return
-    }
-
+    // The UI is the source of truth for execution.
+    // It calls the nuraClient to execute the business logic.
     const success = nuraClient.confirmPendingAction()
     if (!success) {
       toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
+
     // This is the key: stop listening for confirmation once the action is done.
     setIsListeningForConfirmation(false)
     setPendingAction(null)
-  }, [pendingAction, resolveOrderId, handleDeleteOrder, markStepCompleted, appendVoiceMessage, toast])
+  }, [pendingAction, toast])
 
   const handleCancel = useCallback(() => {
-    if (!pendingAction) return
-    pendingAction.onCancel?.()
-    if (!pendingAction.onConfirm) {
+    if (pendingAction) {
       nuraClient.cancelPendingAction()
     }
+    // This is the key: stop listening for confirmation once the action is done.
+    setIsListeningForConfirmation(false)
     setPendingAction(null)
-  }, [pendingAction])
+    toast({ title: "Action cancelled" })
+  }, [pendingAction, toast])
 
   const guidedExamples = useMemo(
     () => [
@@ -534,7 +534,7 @@ export default function App() {
       toast({ title: "Órdenes", description: "El menú ya está abierto", variant: "success" })
     }
     const handlePending = (data: PendingActionState) => {
-      setPendingAction({ ...data, source: "voice" })
+      setPendingAction(data)
       setActionSummary(data.description ? `Necesito tu confirmación: ${data.description}` : "Necesito tu confirmación.")
       toast({
         title: "¿Seguimos?",
@@ -550,6 +550,7 @@ export default function App() {
     }
     const handleCancelled = (data: PendingActionState) => {
       setPendingAction(null)
+      setIsListeningForConfirmation(false)
       setActionSummary("Cancelé la acción, nada cambió.")
       toast({ title: "Acción cancelada", description: data.description })
       appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
@@ -599,10 +600,12 @@ export default function App() {
     const handleDialogCancelEvent = () => {
       handleCancel()
     }
+    const handleActionConfirmed = (data: { intent: string; payload?: Record<string, unknown> }) => {
+      handleDeleteOrder(resolveOrderId(data.payload?.id)!)
+    }
 
     eventBus.on("ui.capabilities.open", handleCapabilities)
     eventBus.on("ui.telemetry.open", handleTelemetry)
-    eventBus.on("ui.explain.toggle", handleExplainToggle)
     eventBus.on("voice.wake.fuzzy", handleVoiceWake)
     eventBus.on("ui.menu.open", handleMenuOpen)
     eventBus.on("action.cancelled", handleCancelled)
@@ -618,13 +621,14 @@ export default function App() {
     eventBus.on("mcp.error", handleMcpError)
     eventBus.on("ui.dialog.confirm", handleDialogConfirmEvent)
     eventBus.on("ui.dialog.cancel", handleDialogCancelEvent)
+    eventBus.on("action.confirmed", handleActionConfirmed)
+    eventBus.on("ui.explain.toggle", handleExplainToggle)
     // The action.pending event is the single source of truth to open the dialog
     eventBus.on("action.pending", handlePending)
 
     return () => {
       eventBus.off("ui.capabilities.open", handleCapabilities)
       eventBus.off("ui.telemetry.open", handleTelemetry)
-      eventBus.off("ui.explain.toggle", handleExplainToggle)
       eventBus.off("voice.wake.fuzzy", handleVoiceWake)
       eventBus.off("ui.menu.open", handleMenuOpen)
       eventBus.off("action.cancelled", handleCancelled)
@@ -640,6 +644,8 @@ export default function App() {
       eventBus.off("mcp.error", handleMcpError)
       eventBus.off("ui.dialog.confirm", handleDialogConfirmEvent)
       eventBus.off("ui.dialog.cancel", handleDialogCancelEvent)
+      eventBus.off("action.confirmed", handleActionConfirmed)
+      eventBus.off("ui.explain.toggle", handleExplainToggle)
       eventBus.off("action.pending", handlePending)
     }
   }, [
@@ -648,6 +654,7 @@ export default function App() {
     handleAddOrder,
     handleCancel,
     handleConfirm,
+    handleDeleteOrder,
     handleVoiceAdd,
     handleVoiceUpdate,
     highlightedOrderId,
@@ -874,6 +881,7 @@ export default function App() {
         onResult={setLastResult}
         explainMode={explainMode}
         onCommandExecuted={handleCommandExecuted}
+        listenForConfirmation={isListeningForConfirmation}
       />
       <EventDock />
 
