@@ -35,7 +35,24 @@ export default function CommandConsole({
   const locale: Locale = "auto"
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const { toast } = useToast()
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+
+  const inputPlaceholder = useMemo(
+    () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
+    [isListening],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+        recognitionRef.current = null
+      }
+    }
+  }, [])
+
+  const updateMessage = useCallback((message: string) => {
+    setLastMessage(message)
+  }, [])
 
   const inputPlaceholder = useMemo(
     () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
@@ -64,6 +81,7 @@ export default function CommandConsole({
       }
 
       setIsProcessing(true)
+
       nuraClient.setThreshold(threshold)
       nuraClient.setStrategy(strategy)
       nuraClient.setLocale(locale)

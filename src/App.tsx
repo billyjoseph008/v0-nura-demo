@@ -156,6 +156,15 @@ export default function App() {
     }, 2400)
   }, [])
 
+  const handleExamplePrefill = useCallback(
+    (exampleUtterance: string) => {
+      setConsoleUtterance(exampleUtterance)
+      setActionSummary(`Frase lista: "${exampleUtterance}".`)
+      eventBus.emit("ui.examples.prefill", { utterance: exampleUtterance })
+    },
+    [setActionSummary, setConsoleUtterance],
+  )
+
   const openCapabilities = useCallback(
     (source: "ui" | "voice" | "keyboard" = "ui") => {
       setCapabilitiesOpen(true)
