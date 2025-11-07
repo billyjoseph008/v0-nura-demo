@@ -391,7 +391,7 @@ export default function App() {
 
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
-      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      toast({ title: "Sin acciones pendientes", description: "No hay nada que confirmar", variant: "destructive" })
       setPendingAction(null) // Close dialog just in case
       return
     }
@@ -400,7 +400,7 @@ export default function App() {
     // It calls the nuraClient to execute the business logic.
     const success = nuraClient.confirmPendingAction()
     if (!success) {
-      toast({ title: "Unable to confirm", description: "No action was pending in the client", variant: "destructive" })
+      toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
 
     // This is the key: stop listening for confirmation once the action is done.
