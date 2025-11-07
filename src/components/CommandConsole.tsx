@@ -1,14 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Mic, MicOff, Play, Sparkles } from "lucide-react"
-
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Mic, MicOff, Play, Info, Sparkles } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { nuraClient } from "@/lib/nuraClient"
-import { createSpeechRecognition, getLocaleCode, isSpeechRecognitionSupported } from "@/lib/speech"
-import type { Locale, NuraResult, FuzzyStrategy } from "@/lib/types"
+import { createSpeechRecognition, getLocaleCode, isSpeechRecognitionSupported, type SpeechRecognition } from "@/lib/speech"
+import type { NuraResult, Locale, FuzzyStrategy } from "@/lib/types"
 
 interface CommandConsoleProps {
   utterance: string
@@ -16,6 +17,7 @@ interface CommandConsoleProps {
   onResult: (result: NuraResult) => void
   explainMode: boolean
   onCommandExecuted?: (command: string, source: "manual" | "voice") => void
+  listenForConfirmation?: boolean
 }
 
 export default function CommandConsole({
@@ -24,6 +26,7 @@ export default function CommandConsole({
   onResult,
   explainMode,
   onCommandExecuted,
+  listenForConfirmation = false,
 }: CommandConsoleProps) {
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -33,24 +36,7 @@ export default function CommandConsole({
   const locale: Locale = "auto"
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const { toast } = useToast()
-
-  const inputPlaceholder = useMemo(
-    () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
-    [isListening],
-  )
-
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
-        recognitionRef.current = null
-      }
-    }
-  }, [])
-
-  const updateMessage = useCallback((message: string) => {
-    setLastMessage(message)
-  }, [])
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   const runCommand = useCallback(
     async (command: string, source: "manual" | "voice" = "manual") => {
@@ -96,7 +82,25 @@ export default function CommandConsole({
     void runCommand(utterance, "manual")
   }, [runCommand, utterance])
 
-  const toggleListening = useCallback(() => {
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      // noop
+    }
+    setIsListening(false)
+  }
+
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      // noop
+    }
+    setIsListening(false)
+  }
+
+  const startListening = () => {
     if (!isSpeechRecognitionSupported()) {
       toast({
         title: "Micrófono no disponible",
@@ -106,22 +110,11 @@ export default function CommandConsole({
       return
     }
 
-    if (isListening) {
-      recognitionRef.current?.stop()
-      setIsListening(false)
-      updateMessage("Listo, detuve la escucha.")
-      return
-    }
+    if (isListening) return
 
     const recognition = createSpeechRecognition()
-    if (!recognition) {
-      toast({
-        title: "Micrófono no disponible",
-        description: "No pude iniciar el reconocimiento de voz.",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!recognition) return
+    recognitionRef.current = recognition
 
     recognitionRef.current = recognition
     recognition.continuous = false
@@ -160,6 +153,33 @@ export default function CommandConsole({
     setIsListening(true)
     updateMessage("Te escucho, habla con calma.")
   }, [isListening, locale, isProcessing, onUtteranceChange, runCommand, toast, updateMessage])
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
+
+  useEffect(() => {
+    if (listenForConfirmation) {
+      // Auto-start listening when a confirmation dialog is open
+      startListening()
+    } else if (isListening) {
+      // Stop listening once confirmation flow ends
+      stopListening()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenForConfirmation])
 
   return (
     <div
