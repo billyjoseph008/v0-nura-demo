@@ -126,16 +126,32 @@ export default function App() {
     }, 3200)
   }, [])
 
-  const resolveOrderId = useCallback((value: unknown): number | null => {
-    if (typeof value === "number" && !Number.isNaN(value)) {
-      return value
-    }
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number.parseInt(value, 10)
-      return Number.isNaN(parsed) ? null : parsed
-    }
-    return null
-  }, [])
+  const resolveOrderId = useCallback(
+    (value: unknown): number | null => {
+      let numericValue: number | null = null
+      if (typeof value === "number" && !Number.isNaN(value)) {
+        numericValue = value
+      } else if (typeof value === "string" && value.trim()) {
+        const parsed = Number.parseInt(value, 10)
+        if (!Number.isNaN(parsed)) {
+          numericValue = parsed
+        }
+      }
+
+      if (numericValue === null) return null
+
+      // 1. Búsqueda por ID directo (prioridad alta)
+      const directMatch = orders.find((order) => order.id === numericValue)
+      if (directMatch) return directMatch.id
+
+      // 2. Búsqueda por posición (fallback)
+      const positionalIndex = numericValue - 1
+      if (positionalIndex >= 0 && positionalIndex < orders.length) return orders[positionalIndex].id
+
+      return null
+    },
+    [orders],
+  )
 
   const clearHighlight = useCallback(() => {
     if (highlightTimeout.current) {
@@ -338,19 +354,34 @@ export default function App() {
   )
 
   const handleDeleteOrder = useCallback(
-    (id: number) => {
-      const target = orders.find((order) => order.id === id)
-      setOrders((previous) => previous.filter((order) => order.id !== id))
-      ordersRef.current = ordersRef.current.filter((order) => order.id !== id)
-      if (target) {
+    (id: number, source: "ui" | "voice" = "ui") => {
+      const resolvedId = source === "voice" ? resolveOrderId(id) : id
+      if (resolvedId === null) {
+        toast({ title: "Orden no encontrada", description: `No encontré la orden número ${id}.`, variant: "destructive" })
+        return
+      }
+      setOrders((previous) => {
+        const target = previous.find((order) => order.id === resolvedId)
+        if (!target) return previous
+
+        const nextOrders = previous.filter((order) => order.id !== resolvedId)
+        ordersRef.current = nextOrders
+
         setActionSummary(`Eliminé ${target.name} de la lista.`)
         toast({
           title: "Orden eliminada",
           description: target.notes ? `${target.name} · ${target.notes}` : target.name,
+          variant: "success",
         })
-      }
+
+        if (source === "voice") {
+          markStepCompleted("deleteOrder")
+          appendVoiceMessage({ role: "nura", content: `Listo, eliminé la orden ${target.name}.` })
+        }
+        return nextOrders
+      })
     },
-    [orders, toast],
+    [resolveOrderId, toast, markStepCompleted, appendVoiceMessage],
   )
 
   const handleVoiceAdd = useCallback(
@@ -363,9 +394,8 @@ export default function App() {
 
   const handleVoiceUpdate = useCallback(
     (data: { id?: unknown; name?: string; notes?: string }) => {
-      const resolved = resolveOrderId(data.id)
-      const lastOrderId = ordersRef.current.length ? ordersRef.current[ordersRef.current.length - 1].id : null
-      const fallbackId = resolved ?? lastOrderId
+      const targetId = resolveOrderId(data.id)
+      const fallbackId = targetId ?? (ordersRef.current.length > 0 ? ordersRef.current[ordersRef.current.length - 1].id : null)
       if (fallbackId === null) {
         toast({
           title: "Aún no hay órdenes",
@@ -431,6 +461,14 @@ export default function App() {
     ],
     [],
   )
+
+  // This effect ensures that if the confirmation flow is aborted from outside
+  // (e.g., by starting a new command), the microphone in CommandConsole stops.
+  useEffect(() => {
+    if (!isListeningForConfirmation) {
+      eventBus.emit("voice.confirmation.cancel")
+    }
+  }, [isListeningForConfirmation])
 
   const handleDeleteOrderPrompt = useCallback(() => {
     setPendingAction({
@@ -500,7 +538,7 @@ export default function App() {
       setPendingAction(null)
       setIsListeningForConfirmation(false)
       setActionSummary("Cancelé la acción, nada cambió.")
-      toast({ title: "Acción cancelada", description: data.description })
+      toast({ title: "Acción cancelada", description: data.description ?? "La operación fue cancelada." })
       appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
     }
     const handleDeleted = (data: { id?: unknown }) => {
@@ -553,7 +591,14 @@ export default function App() {
       handleCancel()
     }
     const handleActionConfirmed = (data: { intent: string; payload?: Record<string, unknown> }) => {
-      handleDeleteOrder(resolveOrderId(data.payload?.id)!)
+      const rawId = data.payload?.id
+      const orderId = resolveOrderId(rawId)
+
+      if (orderId !== null) {
+        handleDeleteOrder(orderId, "voice")
+      } else if (rawId) {
+        toast({ title: "Orden no encontrada", description: `No pude encontrar la orden ${rawId} para eliminarla.`, variant: "destructive" })
+      }
     }
 
     eventBus.on("ui.capabilities.open", handleCapabilities)
