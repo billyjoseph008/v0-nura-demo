@@ -48,6 +48,29 @@ interface PendingActionState {
   source?: "voice" | "ui"
 }
 
+const guidedExamples = [
+  {
+    title: "Abre el menú de órdenes",
+    description: "Descubre cómo navego por los pedidos con tu voz.",
+    utterance: "ok nura abre el menú de órdenes",
+  },
+  {
+    title: "Elimina una orden",
+    description: "Prueba un flujo con confirmación automática.",
+    utterance: "ok nura elimina la orden quince",
+  },
+  {
+    title: "Confirma la acción",
+    description: "Usa el sí que activa el modo de confirmación.",
+    utterance: "sí, elimínala",
+  },
+  {
+    title: "Muéstrame capacidades",
+    description: "Abre el panel de ayuda y atajos.",
+    utterance: "ok nura muestra capacidades",
+  },
+]
+
 export default function App() {
   const [lastResult, setLastResult] = useState<NuraResult | null>(null)
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false)
@@ -155,6 +178,14 @@ export default function App() {
       highlightTimeout.current = null
     }, 2400)
   }, [])
+
+  const handleExamplePrefill = useCallback(
+    (exampleUtterance: string) => {
+      setConsoleUtterance(exampleUtterance)
+      setActionSummary(`Frase lista: "${exampleUtterance}".`)
+    },
+    [setActionSummary, setConsoleUtterance],
+  )
 
   const openCapabilities = useCallback(
     (source: "ui" | "voice" | "keyboard" = "ui") => {
@@ -395,8 +426,10 @@ export default function App() {
     if (!success) {
       toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
+    // This is the key: stop listening for confirmation once the action is done.
+    setIsListeningForConfirmation(false)
     setPendingAction(null)
-  }, [pendingAction, toast])
+  }, [pendingAction, resolveOrderId, handleDeleteOrder, markStepCompleted, appendVoiceMessage, toast])
 
   const handleCancel = useCallback(() => {
     if (!pendingAction) return
@@ -540,6 +573,8 @@ export default function App() {
         role: "nura",
         content: `${data.description}. Solo confirma y me encargo.`,
       })
+      // This is the magic: automatically start listening for the "yes" or "no".
+      setIsListeningForConfirmation(true)
     }
     const handleCancelled = (data: PendingActionState) => {
       setPendingAction(null)
@@ -598,9 +633,7 @@ export default function App() {
     eventBus.on("ui.explain.toggle", handleExplainToggle)
     eventBus.on("voice.wake.fuzzy", handleVoiceWake)
     eventBus.on("ui.menu.open", handleMenuOpen)
-    eventBus.on("action.pending", handlePending)
     eventBus.on("action.cancelled", handleCancelled)
-    eventBus.on("order.deleted", handleDeleted)
     eventBus.on("order.voice.add", handleVoiceAdd)
     eventBus.on("order.voice.update", handleVoiceUpdate)
     eventBus.on("context.confirmation", handleContextConfirm)
@@ -613,6 +646,8 @@ export default function App() {
     eventBus.on("mcp.error", handleMcpError)
     eventBus.on("ui.dialog.confirm", handleDialogConfirmEvent)
     eventBus.on("ui.dialog.cancel", handleDialogCancelEvent)
+    // The action.pending event is the single source of truth to open the dialog
+    eventBus.on("action.pending", handlePending)
 
     return () => {
       eventBus.off("ui.capabilities.open", handleCapabilities)
@@ -620,9 +655,7 @@ export default function App() {
       eventBus.off("ui.explain.toggle", handleExplainToggle)
       eventBus.off("voice.wake.fuzzy", handleVoiceWake)
       eventBus.off("ui.menu.open", handleMenuOpen)
-      eventBus.off("action.pending", handlePending)
       eventBus.off("action.cancelled", handleCancelled)
-      eventBus.off("order.deleted", handleDeleted)
       eventBus.off("order.voice.add", handleVoiceAdd)
       eventBus.off("order.voice.update", handleVoiceUpdate)
       eventBus.off("context.confirmation", handleContextConfirm)
@@ -635,6 +668,7 @@ export default function App() {
       eventBus.off("mcp.error", handleMcpError)
       eventBus.off("ui.dialog.confirm", handleDialogConfirmEvent)
       eventBus.off("ui.dialog.cancel", handleDialogCancelEvent)
+      eventBus.off("action.pending", handlePending)
     }
   }, [
     appendVoiceMessage,

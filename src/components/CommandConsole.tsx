@@ -16,6 +16,7 @@ interface CommandConsoleProps {
   onResult: (result: NuraResult) => void
   explainMode: boolean
   onCommandExecuted?: (command: string, source: "manual" | "voice") => void
+  listenForConfirmation?: boolean
 }
 
 export default function CommandConsole({
@@ -24,6 +25,7 @@ export default function CommandConsole({
   onResult,
   explainMode,
   onCommandExecuted,
+  listenForConfirmation = false,
 }: CommandConsoleProps) {
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -61,6 +63,7 @@ export default function CommandConsole({
       }
 
       setIsProcessing(true)
+
       nuraClient.setThreshold(threshold)
       nuraClient.setStrategy(strategy)
       nuraClient.setLocale(locale)
