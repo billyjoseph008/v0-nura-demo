@@ -439,6 +439,12 @@ export default function App() {
     [],
   )
 
+  const handleExamplePrefill = useCallback((phrase: string) => {
+    setConsoleUtterance(phrase)
+    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
+    eventBus.emit("ui.examples.prefill", { utterance: phrase })
+  }, [])
+
   const handleDeleteOrderPrompt = useCallback(() => {
     setPendingAction({
       intent: "delete::order",
@@ -747,13 +753,13 @@ export default function App() {
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 shadow-[0_0_20px_rgba(129,140,248,0.45)]">
                 <Sparkles className="h-4 w-4" />
               </span>
-              Demo guiada por voz
+              Bienvenido a Nura
             </div>
             <h1 className="mt-6 text-3xl font-semibold leading-tight text-[hsl(var(--foreground))] sm:text-4xl">
-              Explora Nura sin tecnicismos
+              Tu asistente de voz, sin tecnicismos
             </h1>
             <p className="mt-4 max-w-xl text-base text-[hsl(var(--foreground))/0.75]">
-              Prueba frases cotidianas, mira cómo reacciono y descubre nuevas formas de colaborar solo con tu voz.
+              Lanza frases sencillas y déjame interpretar tu intención, ejecutar acciones y contarte cada paso con lenguaje claro y cercano.
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {guidedExamples.map((example) => (
@@ -770,15 +776,9 @@ export default function App() {
               ))}
             </div>
 
-          </section>
-
-          <section className="relative h-full space-y-8">
-            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-6 shadow-[0_20px_60px_rgba(59,130,246,0.25)] backdrop-blur-xl">
-              <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Menú interactivo</h2>
-              <p className="mt-2 text-sm text-[hsl(var(--foreground))/0.75]">
-                Accede rápido a las acciones más usadas o lánzalas con tu voz cuando quieras.
-              </p>
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <div className="mt-10 space-y-3">
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))/0.85]">Atajos rápidos</p>
+              <div className="grid gap-3 sm:grid-cols-2">
                 {menuActions.map((action) => {
                   const Icon = action.icon
                   return (
@@ -787,7 +787,7 @@ export default function App() {
                       type="button"
                       data-testid={action.testId}
                       onClick={action.onClick}
-                      className={`group flex flex-col gap-1 rounded-2xl border px-4 py-4 text-left transition-all duration-500 hover:scale-[1.01] hover:shadow-[0_25px_60px_rgba(129,140,248,0.35)] ${
+                      className={`group flex flex-col gap-1 rounded-2xl border px-4 py-3 text-left transition-all duration-500 hover:scale-[1.01] hover:shadow-[0_25px_60px_rgba(129,140,248,0.35)] ${
                         action.variant === "primary"
                           ? "border-primary/60 bg-primary/20 text-[hsl(var(--foreground))]"
                           : action.variant === "destructive"
@@ -805,9 +805,10 @@ export default function App() {
                 })}
               </div>
             </div>
+          </section>
 
+          <section className="relative h-full">
             <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-6 shadow-[0_20px_60px_rgba(15,118,110,0.25)] backdrop-blur-xl">
-              <h2 className="sr-only">Interactive Orders</h2>
               <OrdersPanel
                 open={ordersPanelOpen}
                 onOpenChange={setOrdersPanelOpen}
