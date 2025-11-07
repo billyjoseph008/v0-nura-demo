@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Sparkles } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import Header from "@/components/Header"
 import Badges from "@/components/Badges"
@@ -14,6 +15,7 @@ import Footer from "@/components/Footer"
 import OrdersPanel, { type OrderItem } from "@/components/OrdersPanel"
 import CapabilitiesModal, { type CapabilitiesQuickAction } from "@/components/CapabilitiesModal"
 import TelemetryModal from "@/components/TelemetryModal"
+import EventDock from "@/components/EventDock"
 import {
   Dialog,
   DialogContent,
@@ -40,6 +42,9 @@ interface PendingActionState {
   intent: string
   description: string
   payload?: Record<string, unknown>
+  onConfirm?: () => void
+  onCancel?: () => void
+  source?: "voice" | "ui"
 }
 
 export default function App() {
@@ -56,6 +61,8 @@ export default function App() {
     { id: 2, name: "Sandwich vegano", notes: "Agregar aderezo ligero" },
   ])
   const ordersRef = useRef<OrderItem[]>(orders)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [consoleUtterance, setConsoleUtterance] = useState("")
   const [voiceSteps, setVoiceSteps] = useState<VoiceStepStatusMap>(() => createInitialVoiceState())
   const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([])
   const [highlightedOrderId, setHighlightedOrderId] = useState<number | null>(null)
@@ -63,6 +70,14 @@ export default function App() {
   const orderHighlightTimeout = useRef<number | null>(null)
   const timeFormatter = useMemo(() => new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }), [])
   const { toast } = useToast()
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.add("dark")
+    return () => {
+      root.classList.remove("dark")
+    }
+  }, [])
 
   const appendVoiceMessage = useCallback(
     (message: { role: VoiceMessage["role"]; content: string }) => {
@@ -143,15 +158,15 @@ export default function App() {
   const openCapabilities = useCallback(
     (source: "ui" | "voice" | "keyboard" = "ui") => {
       setCapabilitiesOpen(true)
-      setActionSummary("Capabilities modal opened.")
+      setActionSummary("Te muestro todo lo que Nura puede hacer.")
       toast({
-        title: "Help panel",
+        title: "Guía rápida",
         description:
           source === "voice"
-            ? "Opened via voice intent"
+            ? "Lo abriste con tu voz."
             : source === "keyboard"
-              ? "Opened via keyboard shortcut"
-              : "Interactive capabilities modal opened",
+              ? "Atajo de teclado activado."
+              : "Abrí el panel de capacidades para ti.",
         variant: "info",
       })
     },
@@ -162,15 +177,15 @@ export default function App() {
     (source: "ui" | "voice" | "keyboard" = "ui") => {
       setTelemetryModalOpen(true)
       highlightTelemetryCard()
-      setActionSummary("Telemetry modal opened with live ranking.")
+      setActionSummary("Mostré los indicadores en detalle.")
       toast({
-        title: "Telemetry spotlight",
+        title: "Indicadores abiertos",
         description:
           source === "voice"
-            ? "Opened via voice intent"
+            ? "Llegaste aquí con tu voz."
             : source === "keyboard"
-              ? "Opened via keyboard shortcut"
-              : "Telemetry modal opened",
+              ? "Atajo de teclado activado."
+              : "Abrí la vista de indicadores para que explores.",
         variant: "info",
       })
     },
@@ -180,9 +195,9 @@ export default function App() {
   const toggleTelemetry = useCallback(() => {
     setTelemetryModalOpen((prev) => {
       if (prev) {
-        toast({ title: "Telemetry", description: "Telemetry modal closed" })
+        toast({ title: "Indicadores", description: "Cerré la vista avanzada" })
         clearHighlight()
-        setActionSummary("Telemetry modal closed.")
+        setActionSummary("Cerré los indicadores avanzados.")
         return false
       }
       openTelemetry("keyboard")
@@ -196,17 +211,17 @@ export default function App() {
         if (previous === enabled) return previous
         setActionSummary(
           enabled
-            ? "Explain mode is active. Commands will not execute."
-            : "Explain mode disabled. Commands will execute normally.",
+            ? "Modo explicación encendido: solo te cuento qué haría."
+            : "Modo explicación desactivado: vuelvo a ejecutar las acciones.",
         )
         toast({
-          title: enabled ? "Explain mode enabled" : "Explain mode disabled",
+          title: enabled ? "Modo explicación activado" : "Modo explicación desactivado",
           description:
             source === "voice"
-              ? "Updated via voice intent"
+              ? "Lo cambiaste con tu voz."
               : source === "keyboard"
-                ? "Updated via keyboard shortcut"
-                : "Updated via UI control",
+                ? "Atajo de teclado activado."
+                : "Actualicé el modo desde la interfaz.",
           variant: enabled ? "info" : "default",
         })
         return enabled
@@ -251,9 +266,9 @@ export default function App() {
       setOrders((previous) => [...previous, newOrder])
       ordersRef.current = [...ordersRef.current, newOrder]
       setOrdersPanelOpen(true)
-      setActionSummary(`Order added: ${newOrder.name}.`)
+      setActionSummary(`Agregué ${newOrder.name} a la lista.`)
       toast({
-        title: "Order added",
+        title: "Orden agregada",
         description: order.notes ? `${order.name} · ${order.notes}` : order.name,
         variant: "success",
       })
@@ -287,8 +302,8 @@ export default function App() {
 
       if (!updatedOrder) {
         toast({
-          title: "Order not found",
-          description: "Nura no encontró la orden a actualizar",
+          title: "No encontré la orden",
+          description: "Necesito una orden existente para actualizarla",
           variant: "destructive",
         })
         return
@@ -296,9 +311,9 @@ export default function App() {
 
       ordersRef.current = ordersRef.current.map((order) => (order.id === updatedOrder!.id ? updatedOrder! : order))
       setOrdersPanelOpen(true)
-      setActionSummary(`Order updated: ${updatedOrder.name}.`)
+      setActionSummary(`Actualicé ${updatedOrder.name} tal como querías.`)
       toast({
-        title: "Order updated",
+        title: "Orden actualizada",
         description: updatedOrder.notes ? `${updatedOrder.name} · ${updatedOrder.notes}` : updatedOrder.name,
         variant: source === "voice" ? "success" : "default",
       })
@@ -320,9 +335,9 @@ export default function App() {
       setOrders((previous) => previous.filter((order) => order.id !== id))
       ordersRef.current = ordersRef.current.filter((order) => order.id !== id)
       if (target) {
-        setActionSummary(`Order removed: ${target.name}.`)
+        setActionSummary(`Eliminé ${target.name} de la lista.`)
         toast({
-          title: "Order removed",
+          title: "Orden eliminada",
           description: target.notes ? `${target.name} · ${target.notes}` : target.name,
         })
       }
@@ -345,8 +360,8 @@ export default function App() {
       const fallbackId = resolved ?? lastOrderId
       if (fallbackId === null) {
         toast({
-          title: "No orders yet",
-          description: "Agrega una orden antes de actualizarla por voz",
+          title: "Aún no hay órdenes",
+          description: "Primero agrega una orden y luego la actualizamos",
           variant: "destructive",
         })
         return
@@ -365,22 +380,126 @@ export default function App() {
 
   const handleConfirm = useCallback(() => {
     if (!pendingAction) {
-      toast({ title: "Nothing to confirm", description: "No pending action", variant: "destructive" })
+      toast({ title: "Sin acciones pendientes", description: "No hay nada que confirmar", variant: "destructive" })
       return
     }
+
+    if (pendingAction.onConfirm) {
+      pendingAction.onConfirm()
+      setPendingAction(null)
+      return
+    }
+
     const success = nuraClient.confirmPendingAction()
     if (!success) {
-      toast({ title: "Unable to confirm", description: "No action executed", variant: "destructive" })
+      toast({ title: "No pude confirmar", description: "No había nada en espera", variant: "destructive" })
     }
     setPendingAction(null)
   }, [pendingAction, toast])
 
   const handleCancel = useCallback(() => {
-    if (pendingAction) {
+    if (!pendingAction) return
+    pendingAction.onCancel?.()
+    if (!pendingAction.onConfirm) {
       nuraClient.cancelPendingAction()
-      setPendingAction(null)
     }
+    setPendingAction(null)
   }, [pendingAction])
+
+  const guidedExamples = useMemo(
+    () => [
+      {
+        title: "Pedir un latte cremoso",
+        utterance: "ok nura agrega una orden de latte vainilla sin azúcar",
+        description: "Ideal para probar cómo capto nuevas órdenes.",
+      },
+      {
+        title: "Revisar tus pedidos",
+        utterance: "ok nura abre el menú de órdenes",
+        description: "Abro el panel para que veas todo.",
+      },
+      {
+        title: "Explorar habilidades",
+        utterance: "ok nura muestra tus capacidades",
+        description: "Te cuento lo que puedo hacer por ti.",
+      },
+    ],
+    [],
+  )
+
+  const handleExamplePrefill = useCallback((phrase: string) => {
+    setConsoleUtterance(phrase)
+    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
+    eventBus.emit("ui.examples.prefill", { utterance: phrase })
+  }, [])
+
+  const handleOrdersMenuClick = useCallback(() => {
+    setShowAdvanced(true)
+    setOrdersPanelOpen(true)
+    setActionSummary("Abrí el menú de órdenes para seguir contigo.")
+    eventBus.emit("ui.menu.quick-open", { source: "menu" })
+  }, [])
+
+  const handleDeleteOrderPrompt = useCallback(() => {
+    setShowAdvanced(true)
+    setPendingAction({
+      intent: "delete::order",
+      description: "¿Eliminamos la orden 15?",
+      payload: { id: 15 },
+      source: "ui",
+      onConfirm: () => {
+        handleDeleteOrder(15)
+        eventBus.emit("ui.order.manualDeleted", { id: 15 })
+      },
+    })
+    setActionSummary("Puedo borrar la orden 15 cuando me lo confirmes.")
+  }, [handleDeleteOrder])
+
+  const handleCapabilitiesClick = useCallback(() => {
+    openCapabilities("ui")
+    eventBus.emit("ui.capabilities.manual", { source: "menu" })
+  }, [openCapabilities])
+
+  const handleMcpConnectClick = useCallback(() => {
+    setShowAdvanced(true)
+    setActionSummary("Abriendo el puente con MCP…")
+    eventBus.emit("ui.mcp.connect.manual", { source: "menu" })
+    eventBus.emit("mcp.request.connect", { source: "menu" })
+  }, [])
+
+  const menuActions = useMemo(
+    () => [
+      {
+        label: "Abrir menú de órdenes",
+        hint: "Gestiona pedidos con un toque mágico.",
+        onClick: handleOrdersMenuClick,
+        testId: "btn-open-orders",
+        variant: "primary" as const,
+      },
+      {
+        label: "Eliminar orden 15",
+        hint: "Te pido confirmación antes de limpiar la lista.",
+        onClick: handleDeleteOrderPrompt,
+        testId: "btn-delete-15",
+        variant: "destructive" as const,
+      },
+      {
+        label: "Capacidades de Nura",
+        hint: "Descubre todo lo que puedo hacer contigo.",
+        onClick: handleCapabilitiesClick,
+        testId: "btn-show-capabilities",
+        variant: "secondary" as const,
+      },
+      {
+        label: "Conectar MCP",
+        hint: "Enlazo el puente con tus herramientas externas.",
+        onClick: handleMcpConnectClick,
+        testId: "btn-mcp-connect",
+        variant: "secondary" as const,
+      },
+    ],
+    [handleCapabilitiesClick, handleDeleteOrderPrompt, handleMcpConnectClick, handleOrdersMenuClick],
+  )
 
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
@@ -388,23 +507,23 @@ export default function App() {
     const handleExplainToggle = (data: { enabled: boolean }) => applyExplainMode(data.enabled, "voice")
     const handleVoiceWake = (data: { wake: string; canonical: string; confidence: number }) => {
       toast({
-        title: "Phonetic wake detected",
-        description: `Alias "${data.wake}" matched (${Math.round(data.confidence * 100)}%)`,
+        title: "Te escuché",
+        description: `Reconocí "${data.wake}" con un ${Math.round(data.confidence * 100)}% de coincidencia.`,
         variant: "info",
       })
     }
     const handleMenuOpen = () => {
       setOrdersPanelOpen(true)
-      setActionSummary("Interactive orders menu ready.")
+      setActionSummary("Abrí el menú de órdenes para seguir contigo.")
       markStepCompleted("openMenu")
       appendVoiceMessage({ role: "nura", content: "Abrí el menú de órdenes, listo para crear o ajustar pedidos." })
-      toast({ title: "Orders", description: "Orders menu opened", variant: "success" })
+      toast({ title: "Órdenes", description: "El menú ya está abierto", variant: "success" })
     }
     const handlePending = (data: PendingActionState) => {
-      setPendingAction(data)
-      setActionSummary(`Confirmation required: ${data.description}`)
+      setPendingAction({ ...data, source: "voice" })
+      setActionSummary(data.description ? `Necesito tu confirmación: ${data.description}` : "Necesito tu confirmación.")
       toast({
-        title: "Confirmation required",
+        title: "¿Seguimos?",
         description: data.description,
         variant: "destructive",
       })
@@ -415,15 +534,16 @@ export default function App() {
     }
     const handleCancelled = (data: PendingActionState) => {
       setPendingAction(null)
-      toast({ title: "Action cancelled", description: data.description })
+      setActionSummary("Cancelé la acción, nada cambió.")
+      toast({ title: "Acción cancelada", description: data.description })
       appendVoiceMessage({ role: "nura", content: `Perfecto, cancelé: ${data.description}.` })
     }
     const handleDeleted = (data: { id?: unknown }) => {
       setPendingAction(null)
       const id = data.id ?? "(unknown)"
       const numericId = resolveOrderId(id)
-      setActionSummary(`Order ${id} deleted.`)
-      toast({ title: "Order deleted", description: `Order ${id} deleted successfully`, variant: "success" })
+      setActionSummary(`Listo, la orden ${numericId ?? id} ya no está.`)
+      toast({ title: "Orden eliminada", description: `Quité la orden ${id}`, variant: "success" })
       if (numericId !== null) {
         setOrders((previous) => previous.filter((order) => order.id !== numericId))
         ordersRef.current = ordersRef.current.filter((order) => order.id !== numericId)
@@ -439,23 +559,23 @@ export default function App() {
     }
     const handleContextConfirm = (data: { previous: PendingActionState }) => {
       const desc = data.previous.description || data.previous.intent
-      setActionSummary(`Confirmed: ${desc}`)
-      toast({ title: "Confirmed", description: desc, variant: "success" })
+      setActionSummary(desc ? `Confirmado: ${desc}` : "Confirmación recibida.")
+      toast({ title: "Confirmado", description: desc, variant: "success" })
     }
     const handleMcpConnected = (data: { url?: string }) => {
-      setActionSummary(`MCP connected${data.url ? `: ${data.url}` : ""}.`)
+      setActionSummary(`Conecté MCP${data.url ? ` a ${data.url}` : ""}.`)
     }
     const handleMcpDisconnected = () => {
-      setActionSummary("MCP disconnected.")
+      setActionSummary("Desconecté MCP.")
     }
     const handleMcpResources = (data: { count?: number }) => {
-      setActionSummary(`Resources listed (${data.count ?? 0}).`)
+      setActionSummary(`Listé ${data.count ?? 0} recursos de MCP.`)
     }
     const handleMcpTools = (data: { count?: number }) => {
-      setActionSummary(`Tools listed (${data.count ?? 0}).`)
+      setActionSummary(`Listé ${data.count ?? 0} herramientas de MCP.`)
     }
     const handleMcpError = (data: { error?: string }) => {
-      toast({ title: "MCP error", description: data.error ?? "MCP operation failed", variant: "destructive" })
+      toast({ title: "Algo falló con MCP", description: data.error ?? "No pude completar la acción", variant: "destructive" })
     }
     const handleDialogConfirmEvent = () => {
       handleConfirm()
@@ -579,7 +699,8 @@ export default function App() {
         appendVoiceMessage({ role: "user", content: command })
         if (normalized.includes("menú") || normalized.includes("menu")) {
           setOrdersPanelOpen(true)
-          setActionSummary("Orders panel opened automatically from your voice command.")
+          setShowAdvanced(true)
+          setActionSummary("Abrí el menú de órdenes gracias a tu voz.")
           markStepCompleted("openMenu")
         }
       }
@@ -598,59 +719,152 @@ export default function App() {
   })
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_55%),_linear-gradient(180deg,_#ffffff_0%,_#f8fbff_100%)] text-foreground">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.15),_transparent_60%),radial-gradient(circle_at_bottom_right,_rgba(236,72,153,0.12),_transparent_65%)]" />
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <Header />
+    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),_transparent_65%),_radial-gradient(circle_at_bottom,_rgba(52,211,153,0.2),_transparent_70%)] text-[hsl(var(--foreground))]">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.25),_transparent_60%),radial-gradient(circle_at_bottom_right,_rgba(6,182,212,0.18),_transparent_70%)]" />
+      <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 pb-36 pt-16 sm:px-6 lg:px-10">
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+          <section
+            data-testid="guided-demo"
+            className="relative overflow-hidden rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.65] p-8 shadow-[0_25px_80px_rgba(99,102,241,0.25)] backdrop-blur-xl transition-all duration-500"
+          >
+            <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(129,140,248,0.15),_transparent_55%)]" />
+            <div className="flex items-center gap-3 text-sm font-medium text-primary">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/15 shadow-[0_0_20px_rgba(129,140,248,0.45)]">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              Demo guiada por voz
+            </div>
+            <h1 className="mt-6 text-3xl font-semibold leading-tight text-[hsl(var(--foreground))] sm:text-4xl">
+              Habla natural, yo lo hago mágico
+            </h1>
+            <p className="mt-4 max-w-xl text-base text-[hsl(var(--foreground))/0.75]">
+              Da el primer paso con frases sencillas. Yo interpreto tu intención, ejecuto acciones y te cuento lo que
+              sucede sin tecnicismos.
+            </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {guidedExamples.map((example) => (
+                <button
+                  key={example.utterance}
+                  type="button"
+                  onClick={() => handleExamplePrefill(example.utterance)}
+                  className="group relative overflow-hidden rounded-2xl border border-[hsl(var(--border))/50] bg-[hsl(var(--muted))/0.3] px-4 py-3 text-left transition-all duration-500 hover:scale-[1.01] hover:border-primary/60 hover:bg-primary/10"
+                >
+                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{example.title}</div>
+                  <p className="mt-1 text-xs text-[hsl(var(--foreground))/0.7]">{example.description}</p>
+                  <span className="absolute -right-8 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full bg-primary/20 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
+                </button>
+              ))}
+            </div>
+          </section>
 
-        {lastResult && (
-          <div className="mb-6 space-y-4">
-            <Badges result={lastResult} />
-            {actionSummary && (
-              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.3] p-4 text-sm" data-testid="action-summary">
-                {actionSummary}
+          <section className="space-y-6">
+            <div className="rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.6] p-8 shadow-[0_20px_60px_rgba(15,118,110,0.25)] backdrop-blur-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-[hsl(var(--foreground))]">¿Qué quieres probar?</h2>
+                  <p className="mt-2 text-sm text-[hsl(var(--foreground))/0.7]">
+                    Selecciona una acción y mira cómo respondo al instante.
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
-        )}
-
-        {!lastResult && actionSummary && (
-          <div className="mb-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))/0.3] p-4 text-sm" data-testid="action-summary">
-            {actionSummary}
-          </div>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            <CommandConsole
-              onResult={setLastResult}
-              explainMode={explainMode}
-              onExplainModeChange={(value) => applyExplainMode(value, "ui")}
-              onOpenCapabilities={() => openCapabilities("ui")}
-              onCommandExecuted={handleCommandExecuted}
-            />
-            <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
-            <Examples onResult={setLastResult} />
-            <Checklist voiceStatuses={voiceSteps} />
-          </div>
-
-          <div className="space-y-6">
-            <OrdersPanel
-              open={ordersPanelOpen}
-              onOpenChange={setOrdersPanelOpen}
-              orders={orders}
-              onAddOrder={(order) => handleAddOrder(order, "ui")}
-              onDeleteOrder={handleDeleteOrder}
-              onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
-              highlightedOrderId={highlightedOrderId}
-            />
-            <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
-            <McpPanel />
-          </div>
+              <div className="mt-6 grid gap-4">
+                {menuActions.map((action) => (
+                  <button
+                    key={action.testId}
+                    type="button"
+                    data-testid={action.testId}
+                    onClick={action.onClick}
+                    className={`group flex items-center justify-between gap-4 rounded-2xl border px-5 py-4 text-left transition-all duration-500 hover:scale-[1.015] hover:shadow-[0_25px_60px_rgba(129,140,248,0.35)] ${
+                      action.variant === "primary"
+                        ? "border-primary/60 bg-primary/20 text-[hsl(var(--foreground))]"
+                        : action.variant === "destructive"
+                          ? "border-rose-500/40 bg-rose-500/15 text-[hsl(var(--foreground))] hover:border-rose-400/60"
+                          : "border-[hsl(var(--border))/60] bg-[hsl(var(--muted))/0.3]"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-base font-semibold">{action.label}</div>
+                      <p className="mt-1 text-xs text-[hsl(var(--foreground))/0.7]">{action.hint}</p>
+                    </div>
+                    <span className="rounded-full border border-[hsl(var(--border))/60] bg-[hsl(var(--muted))/0.2] px-3 py-1 text-xs uppercase tracking-wide text-[hsl(var(--foreground))/0.6] transition-colors group-hover:border-transparent group-hover:bg-primary/30 group-hover:text-[hsl(var(--foreground))]">
+                      Ir
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
         </div>
 
-        <Footer />
-      </div>
+        {actionSummary && (
+          <div className="mt-12">
+            <div
+              className="rounded-3xl border border-[hsl(var(--border))/50] bg-[hsl(var(--card))/0.6] px-6 py-4 text-sm text-[hsl(var(--foreground))] shadow-[0_20px_60px_rgba(14,165,233,0.25)] backdrop-blur-xl"
+              data-testid="action-summary"
+            >
+              {actionSummary}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-10 flex items-center justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAdvanced((previous) => !previous)}
+            data-testid="btn-advanced-toggle"
+            aria-expanded={showAdvanced}
+            aria-controls="advanced"
+            className="rounded-2xl border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.5] px-6 py-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0_10px_40px_rgba(129,140,248,0.25)] backdrop-blur-lg transition-all duration-300 hover:scale-[1.02] hover:border-primary/60 hover:bg-primary/20"
+          >
+            {showAdvanced ? "Ocultar herramientas avanzadas" : "Mostrar herramientas avanzadas"}
+          </Button>
+        </div>
+
+        <div
+          id="advanced"
+          className={`mt-8 overflow-hidden transition-all duration-500 ease-out ${
+            showAdvanced ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="space-y-10 rounded-3xl border border-[hsl(var(--border))/60] bg-[hsl(var(--card))/0.55] p-8 shadow-[0_30px_120px_rgba(99,102,241,0.35)] backdrop-blur-2xl">
+            <Header />
+            {lastResult && <Badges result={lastResult} />}
+            <div className="grid gap-8 lg:grid-cols-2">
+              <div className="space-y-6">
+                <VoiceJourney steps={voiceSteps} messages={voiceMessages} onReset={resetVoiceJourney} />
+                <Examples onResult={setLastResult} />
+                <Checklist voiceStatuses={voiceSteps} />
+              </div>
+              <div className="space-y-6">
+                <OrdersPanel
+                  open={ordersPanelOpen}
+                  onOpenChange={setOrdersPanelOpen}
+                  orders={orders}
+                  onAddOrder={(order) => handleAddOrder(order, "ui")}
+                  onDeleteOrder={handleDeleteOrder}
+                  onUpdateOrder={(update) => handleUpdateOrder(update, "ui")}
+                  highlightedOrderId={highlightedOrderId}
+                />
+                <Telemetry lastResult={lastResult} highlight={telemetryHighlight} onOpenModal={() => openTelemetry("ui")} />
+                <McpPanel />
+              </div>
+            </div>
+          </div>
+          <div className="mt-8">
+            <Footer />
+          </div>
+        </div>
+      </main>
+
+      <CommandConsole
+        utterance={consoleUtterance}
+        onUtteranceChange={setConsoleUtterance}
+        onResult={setLastResult}
+        explainMode={explainMode}
+        onCommandExecuted={handleCommandExecuted}
+      />
+      <EventDock />
 
       <CapabilitiesModal
         open={capabilitiesOpen}
@@ -672,17 +886,17 @@ export default function App() {
         <DialogContent>
           <div data-testid="confirm-dialog" className="space-y-4">
             <DialogHeader>
-              <DialogTitle>Confirm action</DialogTitle>
+              <DialogTitle>¿Lo confirmamos?</DialogTitle>
               <DialogDescription>
-                {pendingAction?.description ?? "Are you sure you want to proceed?"}
+                {pendingAction?.description ?? "¿Quieres que continúe con esta acción?"}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="ghost" onClick={handleCancel} data-testid="confirm-no" nuraAction="cancel">
-                Cancel
+                No por ahora
               </Button>
               <Button onClick={handleConfirm} data-testid="confirm-yes" nuraAction="confirm">
-                Confirm
+                Sí, hazlo
               </Button>
             </DialogFooter>
           </div>
