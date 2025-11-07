@@ -38,24 +38,6 @@ export default function CommandConsole({
   const { toast } = useToast()
   const recognitionRef = useRef<SpeechRecognition | null>(null)
 
-  const inputPlaceholder = useMemo(
-    () => (isListening ? "Estoy escuchando…" : "Escribe o di tu próxima acción"),
-    [isListening],
-  )
-
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
-        recognitionRef.current = null
-      }
-    }
-  }, [])
-
-  const updateMessage = useCallback((message: string) => {
-    setLastMessage(message)
-  }, [])
-
   const runCommand = useCallback(
     async (command: string, source: "manual" | "voice" = "manual") => {
       const trimmed = command.trim()
@@ -99,6 +81,15 @@ export default function CommandConsole({
   const handleRunClick = useCallback(() => {
     void runCommand(utterance, "manual")
   }, [runCommand, utterance])
+
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop()
+    } catch {
+      // noop
+    }
+    setIsListening(false)
+  }
 
   const stopListening = () => {
     try {
@@ -162,6 +153,14 @@ export default function CommandConsole({
     setIsListening(true)
     updateMessage("Te escucho, habla con calma.")
   }, [isListening, locale, isProcessing, onUtteranceChange, runCommand, toast, updateMessage])
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
 
   const toggleListening = () => {
     if (isListening) {

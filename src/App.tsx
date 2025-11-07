@@ -404,108 +404,11 @@ export default function App() {
   }, [pendingAction, resolveOrderId, handleDeleteOrder, markStepCompleted, appendVoiceMessage, toast])
 
   const handleCancel = useCallback(() => {
-    if (!pendingAction) return
-    pendingAction.onCancel?.()
-    if (!pendingAction.onConfirm) {
+    if (pendingAction) {
       nuraClient.cancelPendingAction()
     }
     setPendingAction(null)
   }, [pendingAction, toast])
-
-  const guidedExamples = useMemo(
-    () => [
-      {
-        title: "Pedir un latte cremoso",
-        utterance: "ok nura agrega una orden de latte vainilla sin azúcar",
-        description: "Ideal para probar cómo capto nuevas órdenes.",
-      },
-      {
-        title: "Revisar tus pedidos",
-        utterance: "ok nura abre el menú de órdenes",
-        description: "Abro el panel para que veas todo.",
-      },
-      {
-        title: "Explorar habilidades",
-        utterance: "ok nura muestra tus capacidades",
-        description: "Te cuento lo que puedo hacer por ti.",
-      },
-    ],
-    [],
-  )
-
-  const handleExamplePrefill = useCallback((phrase: string) => {
-    setConsoleUtterance(phrase)
-    setActionSummary("Frase lista en la consola, ejecútala cuando quieras.")
-    eventBus.emit("ui.examples.prefill", { utterance: phrase })
-  }, [])
-
-  const handleOrdersMenuClick = useCallback(() => {
-    setShowAdvanced(true)
-    setOrdersPanelOpen(true)
-    setActionSummary("Abrí el menú de órdenes para seguir contigo.")
-    eventBus.emit("ui.menu.quick-open", { source: "menu" })
-  }, [])
-
-  const handleDeleteOrderPrompt = useCallback(() => {
-    setShowAdvanced(true)
-    setPendingAction({
-      intent: "delete::order",
-      description: "¿Eliminamos la orden 15?",
-      payload: { id: 15 },
-      source: "ui",
-      onConfirm: () => {
-        handleDeleteOrder(15)
-        eventBus.emit("ui.order.manualDeleted", { id: 15 })
-      },
-    })
-    setActionSummary("Puedo borrar la orden 15 cuando me lo confirmes.")
-  }, [handleDeleteOrder])
-
-  const handleCapabilitiesClick = useCallback(() => {
-    openCapabilities("ui")
-    eventBus.emit("ui.capabilities.manual", { source: "menu" })
-  }, [openCapabilities])
-
-  const handleMcpConnectClick = useCallback(() => {
-    setShowAdvanced(true)
-    setActionSummary("Abriendo el puente con MCP…")
-    eventBus.emit("ui.mcp.connect.manual", { source: "menu" })
-    eventBus.emit("mcp.request.connect", { source: "menu" })
-  }, [])
-
-  const menuActions = useMemo(
-    () => [
-      {
-        label: "Abrir menú de órdenes",
-        hint: "Gestiona pedidos con un toque mágico.",
-        onClick: handleOrdersMenuClick,
-        testId: "btn-open-orders",
-        variant: "primary" as const,
-      },
-      {
-        label: "Eliminar orden 15",
-        hint: "Te pido confirmación antes de limpiar la lista.",
-        onClick: handleDeleteOrderPrompt,
-        testId: "btn-delete-15",
-        variant: "destructive" as const,
-      },
-      {
-        label: "Capacidades de Nura",
-        hint: "Descubre todo lo que puedo hacer contigo.",
-        onClick: handleCapabilitiesClick,
-        testId: "btn-show-capabilities",
-        variant: "secondary" as const,
-      },
-      {
-        label: "Conectar MCP",
-        hint: "Enlazo el puente con tus herramientas externas.",
-        onClick: handleMcpConnectClick,
-        testId: "btn-mcp-connect",
-        variant: "secondary" as const,
-      },
-    ],
-    [handleCapabilitiesClick, handleDeleteOrderPrompt, handleMcpConnectClick, handleOrdersMenuClick],
-  )
 
   useEffect(() => {
     const handleCapabilities = () => openCapabilities("voice")
