@@ -1,15 +1,19 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Mic, MicOff, Play, Info, Sparkles } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Mic, MicOff, Play, Sparkles } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { nuraClient } from "@/lib/nuraClient"
-import { createSpeechRecognition, getLocaleCode, isSpeechRecognitionSupported, type SpeechRecognition } from "@/lib/speech"
-import type { NuraResult, Locale, FuzzyStrategy } from "@/lib/types"
+import {
+  createSpeechRecognition,
+  getLocaleCode,
+  isSpeechRecognitionSupported,
+  type SpeechRecognition,
+} from "@/lib/speech"
+import type { FuzzyStrategy, Locale, NuraResult } from "@/lib/types"
 
 interface CommandConsoleProps {
   utterance: string
@@ -31,12 +35,43 @@ export default function CommandConsole({
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [lastMessage, setLastMessage] = useState<string>("Listo para escucharte.")
+
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const { toast } = useToast()
+
   const strategy: FuzzyStrategy = "hybrid"
   const threshold = 0.7
   const locale: Locale = "auto"
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const { toast } = useToast()
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+
+  const inputPlaceholder = explainMode
+    ? "Modo explicación activo. Cuéntame qué necesitas revisar."
+    : "Dime qué hacer, por ejemplo: \"abre el menú de órdenes\"."
+
+  const updateMessage = useCallback((message: string) => {
+    setLastMessage(message)
+  }, [])
+
+  const stopListening = useCallback(
+    (statusMessage?: string) => {
+      try {
+        recognitionRef.current?.stop()
+      } catch {
+        // noop
+      }
+      recognitionRef.current = null
+      setIsListening(false)
+      if (statusMessage) {
+        updateMessage(statusMessage)
+      }
+    },
+    [updateMessage],
+  )
+
+  useEffect(() => {
+    return () => {
+      stopListening()
+    }
+  }, [stopListening])
 
   const runCommand = useCallback(
     async (command: string, source: "manual" | "voice" = "manual") => {
@@ -46,7 +81,9 @@ export default function CommandConsole({
         return
       }
 
+      stopListening()
       setIsProcessing(true)
+
       nuraClient.setThreshold(threshold)
       nuraClient.setStrategy(strategy)
       nuraClient.setLocale(locale)
@@ -56,6 +93,7 @@ export default function CommandConsole({
         const result = await nuraClient.process(trimmed)
         onResult(result)
         onCommandExecuted?.(trimmed, source)
+
         if (explainMode) {
           updateMessage("Modo explicación activo: solo te cuento lo que haría.")
         } else if (result.intent) {
@@ -75,32 +113,20 @@ export default function CommandConsole({
         setIsProcessing(false)
       }
     },
-    [explainMode, locale, onCommandExecuted, onResult, strategy, threshold, toast, updateMessage],
+    [
+      explainMode,
+      locale,
+      onCommandExecuted,
+      onResult,
+      stopListening,
+      strategy,
+      threshold,
+      toast,
+      updateMessage,
+    ],
   )
 
-  const handleRunClick = useCallback(() => {
-    void runCommand(utterance, "manual")
-  }, [runCommand, utterance])
-
-  const stopListening = () => {
-    try {
-      recognitionRef.current?.stop()
-    } catch {
-      // noop
-    }
-    setIsListening(false)
-  }
-
-  const stopListening = () => {
-    try {
-      recognitionRef.current?.stop()
-    } catch {
-      // noop
-    }
-    setIsListening(false)
-  }
-
-  const startListening = () => {
+  const startListening = useCallback(() => {
     if (!isSpeechRecognitionSupported()) {
       toast({
         title: "Micrófono no disponible",
@@ -114,7 +140,6 @@ export default function CommandConsole({
 
     const recognition = createSpeechRecognition()
     if (!recognition) return
-    recognitionRef.current = recognition
 
     recognitionRef.current = recognition
     recognition.continuous = false
@@ -124,26 +149,22 @@ export default function CommandConsole({
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript
       onUtteranceChange(transcript)
-      setIsListening(false)
-      recognitionRef.current = null
+      stopListening()
       updateMessage("Gracias, estoy ejecutándolo.")
       void runCommand(transcript, "voice")
     }
 
     recognition.onerror = () => {
-      setIsListening(false)
-      recognitionRef.current = null
+      stopListening("El micrófono tuvo un problema, intenta nuevamente.")
       toast({
         title: "Ups",
         description: "Ocurrió un problema con el micrófono.",
         variant: "destructive",
       })
-      updateMessage("El micrófono tuvo un problema, intenta nuevamente.")
     }
 
     recognition.onend = () => {
-      setIsListening(false)
-      recognitionRef.current = null
+      stopListening()
       if (!isProcessing) {
         updateMessage("Listo para la siguiente indicación.")
       }
@@ -152,34 +173,32 @@ export default function CommandConsole({
     recognition.start()
     setIsListening(true)
     updateMessage("Te escucho, habla con calma.")
-  }, [isListening, locale, isProcessing, onUtteranceChange, runCommand, toast, updateMessage])
+  }, [
+    isListening,
+    isProcessing,
+    locale,
+    onUtteranceChange,
+    runCommand,
+    stopListening,
+    toast,
+    updateMessage,
+  ])
 
-  const toggleListening = () => {
+  const toggleListening = useCallback(() => {
     if (isListening) {
-      stopListening()
+      stopListening("Listo para escucharte.")
     } else {
       startListening()
     }
-  }
-
-  const toggleListening = () => {
-    if (isListening) {
-      stopListening()
-    } else {
-      startListening()
-    }
-  }
+  }, [isListening, startListening, stopListening])
 
   useEffect(() => {
     if (listenForConfirmation) {
-      // Auto-start listening when a confirmation dialog is open
       startListening()
-    } else if (isListening) {
-      // Stop listening once confirmation flow ends
-      stopListening()
+    } else {
+      stopListening("Listo para la siguiente indicación.")
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listenForConfirmation])
+  }, [listenForConfirmation, startListening, stopListening])
 
   return (
     <div
@@ -199,6 +218,7 @@ export default function CommandConsole({
           className={`flex h-2 w-2 items-center justify-center rounded-full transition-all duration-300 ${
             isListening ? "bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]" : "bg-primary/40"
           }`}
+          data-voice-active={isListening ? "true" : undefined}
           aria-hidden="true"
         />
       </div>
@@ -226,7 +246,7 @@ export default function CommandConsole({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault()
-              handleRunClick()
+              void runCommand(utterance, "manual")
             }
           }}
           disabled={isProcessing}
@@ -238,7 +258,7 @@ export default function CommandConsole({
         <Button
           type="button"
           size="icon"
-          onClick={handleRunClick}
+          onClick={() => void runCommand(utterance, "manual")}
           disabled={isProcessing}
           aria-label="Ejecutar comando"
           data-testid="cmd-run"
