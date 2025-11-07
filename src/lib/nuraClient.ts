@@ -54,8 +54,10 @@ const intents: Intent[] = [
   { pattern: "listar herramientas", action: "mcp::list:tools" },
   { pattern: "list tools", action: "mcp::list:tools" },
   { pattern: "sí, confírmalo", action: "confirm::last-action" },
+  { pattern: "sí, elimínalo", action: "confirm::last-action" },
   { pattern: "sí, elimínala", action: "confirm::last-action" },
   { pattern: "yes, confirm", action: "confirm::last-action" },
+  { pattern: "si, eliminalo", action: "confirm::last-action" },
   { pattern: "confirm it", action: "confirm::last-action" },
 ]
 
@@ -508,27 +510,6 @@ export class NuraClient {
       return { intent: "cancel::last-action", confidence: 0.9, payload: previous.payload }
     }
 
-    const dialogContext = this.context.confirmDialog
-    if (dialogContext) {
-      if (affirmatives.some((a) => lowerText.includes(a))) {
-        eventBus.emit("ui.dialog.confirm", { intent: dialogContext.intent ?? "dialog::confirm", context: dialogContext })
-        return {
-          intent: dialogContext.intent ?? "dialog::confirm",
-          confidence: 0.9,
-          payload: dialogContext.description ? { description: dialogContext.description } : undefined,
-        }
-      }
-
-      if (negatives.some((a) => lowerText.includes(a))) {
-        eventBus.emit("ui.dialog.cancel", { intent: dialogContext.intent ?? "dialog::cancel", context: dialogContext })
-        return {
-          intent: dialogContext.intent ?? "dialog::cancel",
-          confidence: 0.88,
-          payload: dialogContext.description ? { description: dialogContext.description } : undefined,
-        }
-      }
-    }
-
     return null
   }
 
@@ -687,6 +668,7 @@ export class NuraClient {
     if (current.action === "delete::order") {
       eventBus.emit("order.delete", { id: current.payload?.id })
       eventBus.emit("order.deleted", { id: current.payload?.id })
+      eventBus.emit("action.confirmed", { intent: current.action, payload: current.payload })
     }
     return true
   }
@@ -697,7 +679,7 @@ export class NuraClient {
     pendingAction = null
     this.context.pendingAction = null
     this.context.confirmDialog = null
-    eventBus.emit("action.cancelled", { intent: current.action, payload: current.payload })
+    eventBus.emit("action.cancelled", { intent: current.action, payload: current.payload, description: current.description })
   }
 }
 
